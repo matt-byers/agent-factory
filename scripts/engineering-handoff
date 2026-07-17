@@ -17,6 +17,11 @@ from agent_creation.engineering_handoff import (
     validate_receipt,
     verify_handoff,
 )
+from agent_creation.engineering_contract import (
+    EngineeringContractError,
+    assess_engineering_receipt,
+    prepare_engineering_input,
+)
 
 
 def main() -> int:
@@ -30,6 +35,11 @@ def main() -> int:
     receipt = commands.add_parser("validate-receipt")
     receipt.add_argument("--manifest", required=True)
     receipt.add_argument("--receipt", required=True)
+    prepare = commands.add_parser("prepare")
+    prepare.add_argument("--kind", choices=("build", "improvement"), required=True)
+    assess = commands.add_parser("assess-receipt")
+    assess.add_argument("--manifest", required=True)
+    assess.add_argument("--receipt", required=True)
     arguments = parser.parse_args()
     root = Path(arguments.root).resolve()
     try:
@@ -41,22 +51,38 @@ def main() -> int:
                 "handoff_id": request["handoff_id"],
                 "artifacts": {key: str(path) for key, path in paths.items()},
             }
+        elif arguments.command == "prepare":
+            result = prepare_engineering_input(root, arguments.kind)
         elif arguments.command == "verify":
             errors = verify_handoff(Path(arguments.manifest))
             result = {"status": "valid" if not errors else "invalid", "errors": errors}
             print(json.dumps(result, sort_keys=True))
             return 0 if not errors else 1
-        else:
+        elif arguments.command == "validate-receipt":
             manifest = Path(arguments.manifest)
             payload = json.loads(Path(arguments.receipt).read_text(encoding="utf-8"))
             errors = validate_receipt(payload, manifest)
             result = {"status": "valid" if not errors else "invalid", "errors": errors}
             print(json.dumps(result, sort_keys=True))
             return 0 if not errors else 1
-    except (OSError, UnicodeError, json.JSONDecodeError, EngineeringHandoffError) as error:
+        else:
+            manifest = Path(arguments.manifest)
+            payload = json.loads(Path(arguments.receipt).read_text(encoding="utf-8"))
+            result = assess_engineering_receipt(payload, manifest)
+            print(json.dumps(result, sort_keys=True))
+            return 1 if result["status"] == "invalid" else 0
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        EngineeringHandoffError,
+        EngineeringContractError,
+    ) as error:
         result = {
             "status": "invalid",
-            "errors": error.issues if isinstance(error, EngineeringHandoffError) else [str(error)],
+            "errors": error.issues
+            if isinstance(error, (EngineeringHandoffError, EngineeringContractError))
+            else [str(error)],
         }
         print(json.dumps(result, sort_keys=True))
         return 1

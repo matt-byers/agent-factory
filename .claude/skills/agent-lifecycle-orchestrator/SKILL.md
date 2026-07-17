@@ -41,8 +41,8 @@ scripts/agent-lifecycle resume --receipt agent-lifecycle/receipts/<receipt>.json
 2. Invoke the returned skill or complete the returned external action.
 3. Run `next`; allow it to advance only after the current stage's artifacts validate.
 4. When the included loop is selected, invoke `/agent-build-loop` with the active handoff. When an external loop is selected, provide that loop the same handoff and receipt contract.
-5. At `awaiting_engineering`, run the included loop immediately or pause while the selected external loop works.
-6. Resume either engineering path with `resume --receipt` after validating its manifest-bound receipt.
+5. At `awaiting_engineering`, run `scripts/engineering-handoff prepare --kind <build|improvement>` and pass that unchanged contract to the selected loop. Run the included loop immediately or pause while the selected external loop works.
+6. Resume either engineering path with `resume --receipt` after validating its manifest-bound receipt. A failed or incomplete result retains its evidence at `agent-lifecycle/attempts/` without advancing.
 7. If `status` reports changed upstream artifacts, follow its rewound stage rather than continuing from stale downstream work.
 
 Never edit lifecycle state by hand, skip a missing artifact, accept a failed or mismatched receipt, or expose held-out evidence before its gate.

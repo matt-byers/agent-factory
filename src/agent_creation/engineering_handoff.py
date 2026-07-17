@@ -11,6 +11,17 @@ from typing import Any
 HANDOFFS_PATH = Path("agent-lifecycle/handoffs")
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9-]*$")
 COMMIT_SHA = re.compile(r"^[0-9a-f]{7,64}$")
+RECEIPT_FIELDS = {
+    "version",
+    "handoff_id",
+    "manifest_sha256",
+    "result_status",
+    "changed_files",
+    "test_evidence",
+    "review_outcome",
+    "commit_sha",
+    "architecture_changed",
+}
 REQUIRED_GATE_KINDS = {"focused_tests", "full_suite", "acceptance_evals", "review"}
 REQUIRED_SOURCE_PATHS = {
     "agent-lifecycle/agent-definition/project-brief.md",
@@ -468,18 +479,34 @@ def verify_handoff(manifest_path: Path) -> list[str]:
     return issues
 
 
-def validate_receipt(receipt: dict[str, Any], manifest_path: Path) -> list[str]:
+def validate_receipt(
+    receipt: dict[str, Any], manifest_path: Path, require_completed: bool = True
+) -> list[str]:
     issues = verify_handoff(manifest_path)
     if issues:
         return issues
+    if not isinstance(receipt, dict):
+        return ["engineering receipt must contain an object"]
     manifest = load_manifest(manifest_path)
+    if set(receipt) != RECEIPT_FIELDS:
+        missing = sorted(RECEIPT_FIELDS - set(receipt))
+        unexpected = sorted(set(receipt) - RECEIPT_FIELDS)
+        details = []
+        if missing:
+            details.append("missing " + ", ".join(missing))
+        if unexpected:
+            details.append("unexpected " + ", ".join(unexpected))
+        issues.append("receipt fields do not match the shared schema: " + "; ".join(details))
     if receipt.get("version") != 1:
         issues.append("receipt version must be 1")
     if receipt.get("handoff_id") != manifest.get("handoff_id"):
         issues.append("receipt handoff id does not match the manifest")
     if receipt.get("manifest_sha256") != digest(manifest_path):
         issues.append("receipt references a stale manifest")
-    if receipt.get("result_status") != "completed":
+    result_status = receipt.get("result_status")
+    if result_status not in {"completed", "failed", "incomplete"}:
+        issues.append("receipt result status must be completed, failed, or incomplete")
+    elif require_completed and result_status != "completed":
         issues.append("receipt result status must be completed")
     changed_files = receipt.get("changed_files")
     allowlist = {
@@ -487,7 +514,11 @@ def validate_receipt(receipt: dict[str, Any], manifest_path: Path) -> list[str]:
         for item in manifest.get("editable_paths", [])
         if isinstance(item, dict) and isinstance(item.get("path"), str)
     }
-    if not non_empty_strings(changed_files):
+    if not isinstance(changed_files, list) or not all(non_empty(path) for path in changed_files):
+        issues.append("receipt changed files must be a string list")
+    elif len(set(changed_files)) != len(changed_files):
+        issues.append("receipt changed files must not contain duplicates")
+    elif result_status == "completed" and not changed_files:
         issues.append("receipt changed files must not be empty")
     else:
         for path in changed_files:
@@ -495,11 +526,18 @@ def validate_receipt(receipt: dict[str, Any], manifest_path: Path) -> list[str]:
                 issues.append(f"changed file is outside the exact allowlist: {path}")
     if not non_empty_strings(receipt.get("test_evidence")):
         issues.append("receipt test evidence must not be empty")
-    if receipt.get("review_outcome") not in {"passed", "passed_with_notes"}:
+    review_outcome = receipt.get("review_outcome")
+    if result_status == "completed" and review_outcome not in {"passed", "passed_with_notes"}:
         issues.append("receipt review outcome must pass")
+    if result_status in {"failed", "incomplete"} and review_outcome != result_status:
+        issues.append(f"{result_status} receipt review outcome must be {result_status}")
     commit_sha = receipt.get("commit_sha")
-    if not isinstance(commit_sha, str) or not COMMIT_SHA.fullmatch(commit_sha):
+    if result_status == "completed" and (
+        not isinstance(commit_sha, str) or not COMMIT_SHA.fullmatch(commit_sha)
+    ):
         issues.append("receipt commit sha must be a hexadecimal git revision")
+    if result_status in {"failed", "incomplete"} and commit_sha is not None:
+        issues.append(f"{result_status} receipt cannot claim a commit sha")
     if not isinstance(receipt.get("architecture_changed"), bool):
         issues.append("receipt architecture changed must be true or false")
     return issues

@@ -15,8 +15,8 @@ from .engineering_handoff import (
     EngineeringHandoffError,
     digest as handoff_digest,
     route_manifest,
-    validate_receipt as validate_engineering_receipt,
 )
+from .engineering_contract import assess_engineering_receipt
 
 
 STATE_PATH = Path("agent-lifecycle/state.yaml")
@@ -91,6 +91,7 @@ def initial_state() -> dict[str, Any]:
         "engineering_loop": None,
         "artifact_fingerprints": {},
         "receipt": None,
+        "engineering_attempt": None,
     }
 
 
@@ -229,6 +230,7 @@ def detect_drift(root: Path, state: dict[str, Any]) -> list[str]:
             state["stage"] = stage.name
             state["status"] = "active"
             state["receipt"] = None
+            state["engineering_attempt"] = None
             state["artifact_fingerprints"] = {
                 name: values
                 for name, values in fingerprints.items()
@@ -248,6 +250,8 @@ def public_state(state: dict[str, Any], changed: list[str] | None = None) -> dic
         response["next"] = invocation_for(state)
     if state.get("receipt"):
         response["receipt"] = state["receipt"]
+    if state.get("engineering_attempt"):
+        response["engineering_attempt"] = state["engineering_attempt"]
     if changed:
         response["changed"] = changed
     return response
@@ -260,6 +264,8 @@ def setup(
     evidence_mode: str,
     engineering_loop: str,
 ) -> dict[str, Any]:
+    if engineering_loop not in {"included", "external"}:
+        raise LifecycleError("engineering loop must be included or external")
     root.mkdir(parents=True, exist_ok=True)
     configuration = {
         "version": 1,
@@ -281,6 +287,12 @@ def start(root: Path, lifecycle: str, engineering_loop: str | None) -> dict[str,
     if selected_loop is None and (root / SETUP_PATH).exists():
         selected_loop = read_json(root / SETUP_PATH, "setup configuration").get("engineering_loop")
     selected_loop = selected_loop or "included"
+    if selected_loop not in {"included", "external"}:
+        raise LifecycleError("engineering loop must be included or external")
+    if engineering_loop is not None and (root / SETUP_PATH).exists():
+        configuration = read_json(root / SETUP_PATH, "setup configuration")
+        configuration["engineering_loop"] = selected_loop
+        atomic_write(root / SETUP_PATH, configuration)
     state = initial_state()
     state.update(
         lifecycle=lifecycle,
@@ -330,6 +342,49 @@ def advance(root: Path) -> dict[str, Any]:
     return public_state(state)
 
 
+def record_engineering_attempt(
+    root: Path,
+    state: dict[str, Any],
+    receipt_path: Path,
+    receipt: dict[str, Any],
+    assessment: dict[str, Any],
+) -> None:
+    receipt_sha256 = handoff_digest(receipt_path)
+    handoff_id = receipt.get("handoff_id")
+    attempts_directory = root / "agent-lifecycle/attempts"
+    if attempts_directory.is_symlink():
+        raise LifecycleError("engineering attempts directory must remain inside the repository")
+    attempts_directory.mkdir(parents=True, exist_ok=True)
+    try:
+        attempts_directory.resolve().relative_to(root.resolve())
+    except ValueError as error:
+        raise LifecycleError("engineering attempts directory must remain inside the repository") from error
+    relative = Path("agent-lifecycle/attempts") / f"engineering-attempt-{receipt_sha256[:12]}.json"
+    path = root / relative
+    payload = {
+        "version": 1,
+        "handoff_id": handoff_id,
+        "status": assessment["status"],
+        "errors": assessment["errors"],
+        "receipt_path": str(receipt_path.relative_to(root.resolve())),
+        "receipt_sha256": receipt_sha256,
+        "receipt": receipt,
+    }
+    if path.is_symlink():
+        raise LifecycleError("engineering attempt path must be a regular repository file")
+    if not path.exists():
+        atomic_write(path, payload)
+        path.chmod(0o444)
+    elif read_json(path, "engineering attempt") != payload:
+        raise LifecycleError("existing engineering attempt evidence does not match the receipt")
+    state["engineering_attempt"] = {
+        "path": str(relative),
+        "sha256": artifact_digest(path),
+        "status": assessment["status"],
+    }
+    save_state(root, state)
+
+
 def validate_receipt(root: Path, state: dict[str, Any], receipt_path: Path) -> dict[str, Any]:
     resolved_root = root.resolve()
     if receipt_path.is_symlink():
@@ -347,9 +402,16 @@ def validate_receipt(root: Path, state: dict[str, Any], receipt_path: Path) -> d
         manifest_path = route_manifest(root, kind)
     except EngineeringHandoffError as error:
         raise LifecycleError("engineering handoff is invalid: " + "; ".join(error.issues)) from error
-    issues = validate_engineering_receipt(receipt, manifest_path)
-    if issues:
-        raise LifecycleError("resume requires a valid completed receipt: " + "; ".join(issues))
+    assessment = assess_engineering_receipt(receipt, manifest_path)
+    if not assessment["accepted"]:
+        record_engineering_attempt(root, state, resolved_receipt, receipt, assessment)
+        if assessment["status"] in {"failed", "incomplete"}:
+            raise LifecycleError(
+                f"engineering implementation {assessment['status']}; evidence retained without advancing"
+            )
+        raise LifecycleError(
+            "resume requires a valid completed receipt: " + "; ".join(assessment["errors"])
+        )
     return receipt
 
 
@@ -364,6 +426,7 @@ def resume(root: Path, receipt_path: Path) -> dict[str, Any]:
         "handoff_id": receipt["handoff_id"],
         "architecture_changed": receipt["architecture_changed"],
     }
+    state["engineering_attempt"] = None
     state["stage"] = "baseline" if state["lifecycle"] == "first-build" else "held_in"
     state["status"] = "active"
     save_state(root, state)
