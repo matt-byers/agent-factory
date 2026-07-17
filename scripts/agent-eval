@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
+from agent_creation.eval_design import read_suite
+from agent_creation.eval_runtime import (
+    LangSmithRunner,
+    NativeEvalBindings,
+    build_native_evaluators,
+    deterministic_invariant_evaluator,
+    project_trial_artifact,
+    native_reference_outputs,
+    run_native_simulated_trial,
+    write_diagnostic_artifacts,
+)
+from agent_creation.target_adapter import TargetAdapter
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    listing = commands.add_parser("list")
+    listing.add_argument("--suite", type=Path, default=REPOSITORY_ROOT / "agent-lifecycle/evals/suite.yaml")
+    run = commands.add_parser("run")
+    run.add_argument("--suite", type=Path, default=REPOSITORY_ROOT / "agent-lifecycle/evals/suite.yaml")
+    run.add_argument("--case", required=True)
+    run.add_argument("--target-command", required=True, help="JSON array containing the target executable and arguments")
+    run.add_argument("--judge-model", required=True)
+    run.add_argument("--simulator-model", required=True)
+    run.add_argument("--timeout", type=float, default=30.0)
+    run.add_argument("--artifacts", action="store_true")
+    run.add_argument("--output-dir", type=Path, default=REPOSITORY_ROOT / "agent-lifecycle/evals/runs")
+    arguments = parser.parse_args()
+    if arguments.command == "list":
+        suite = read_suite(arguments.suite)
+        cases = [
+            {"id": case.get("id"), "split": case.get("split"), "tags": case.get("tags", [])}
+            for case in suite.get("cases", [])
+            if isinstance(case, dict)
+        ]
+        print(json.dumps(cases, sort_keys=True))
+        return 0
+    try:
+        suite = read_suite(arguments.suite)
+    except (OSError, ValueError) as error:
+        print(json.dumps({"status": "invalid", "errors": [str(error)]}, sort_keys=True))
+        return 1
+    selected = next(
+        (case for case in suite.get("cases", []) if isinstance(case, dict) and case.get("id") == arguments.case),
+        None,
+    )
+    if selected is None:
+        print(json.dumps({"status": "invalid", "errors": [f"eval case not found: {arguments.case}"]}, sort_keys=True))
+        return 1
+    if "sealed_ref" in selected:
+        print(json.dumps({"status": "invalid", "errors": ["held-out case is sealed before its lifecycle gate"]}, sort_keys=True))
+        return 1
+    try:
+        command = json.loads(arguments.target_command)
+        adapter = TargetAdapter(command, timeout_seconds=arguments.timeout)
+        bindings = NativeEvalBindings.native()
+        evaluators = build_native_evaluators(selected, bindings, arguments.judge_model)
+        evaluators.append(deterministic_invariant_evaluator)
+        captured: list[dict] = []
+
+        def target(inputs: dict) -> dict:
+            trial = run_native_simulated_trial(
+                selected,
+                adapter,
+                bindings,
+                arguments.simulator_model,
+                int(inputs["trial_index"]),
+            )
+            artifact = project_trial_artifact(trial, [])
+            captured.append(artifact)
+            return {
+                "messages": trial.assistant_messages,
+                "tool_calls": trial.tool_calls,
+                "tool_results": trial.tool_results,
+                "state_snapshots": trial.state_snapshots,
+                "outcome": trial.outcome,
+                "errors": [error.to_dict() for error in trial.errors],
+            }
+
+        examples = [
+            {
+                "inputs": {
+                    "trial_id": f"{selected['id']}:{index}",
+                    "trial_index": index,
+                    "seed": seed,
+                    "messages": [{"role": "user", "content": selected["input"]["initial_user_message"]}],
+                },
+                "outputs": native_reference_outputs(selected),
+            }
+            for index, seed in enumerate(selected["seeds"])
+        ]
+        native_result = LangSmithRunner.native().evaluate_local(
+            target,
+            examples,
+            evaluators,
+            experiment_prefix=f"agent-eval-{selected['id']}",
+        )
+        inconclusive = any(artifact["status"] != "complete" or artifact["errors"] for artifact in captured)
+        result = {
+            "status": "inconclusive" if inconclusive else "complete",
+            "case": selected["id"],
+            "trial_count": len(examples),
+        }
+        if arguments.artifacts:
+            result["artifact_directory"] = str(write_diagnostic_artifacts(arguments.output_dir, captured))
+        if hasattr(native_result, "experiment_name"):
+            result["experiment"] = str(native_result.experiment_name)
+        print(json.dumps(result, sort_keys=True))
+        return 1 if inconclusive else 0
+    except (ImportError, OSError, TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
+        print(json.dumps({"status": "inconclusive", "errors": [str(error)]}, sort_keys=True))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
