@@ -264,6 +264,13 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
                 + "; ".join(issues)
             )
         return
+    if stage.name == "learning":
+        from .eval_compound_learnings import validate_eval_loop_learning
+
+        issues = validate_eval_loop_learning(root)
+        if issues:
+            raise LifecycleError("eval-loop learning is invalid: " + "; ".join(issues))
+        return
     if stage.name not in {"architecture", "diagnosis"}:
         return
     relative = (

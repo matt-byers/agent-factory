@@ -16,6 +16,7 @@ from agent_creation.eval_design import create_suite_artifacts
 from agent_creation.engineering_handoff import create_handoff, digest, route_manifest
 from agent_creation.baseline_evaluation import evaluate_baseline
 from agent_creation.validation_gates import evaluate_held_in, evaluate_held_out
+from agent_creation.eval_compound_learnings import record_eval_loop_learning
 
 
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
@@ -532,9 +533,11 @@ def test_complete_improvement_lifecycle(tmp_path: Path) -> None:
     )
     assert evaluate_held_out(root, held_out_run)["decision"] == "accepted"
     assert payload(run(root, "next"))["stage"] == "learning"
-    write(root, "agent-lifecycle/evidence/eval-loop-learning.yaml", "{}\n")
-
-    completed = payload(run(root, "next"))
+    completed = record_eval_loop_learning(
+        root,
+        [],
+        no_op_reason="The accepted fixture exposed no eval-loop weakness.",
+    )["lifecycle"]
 
     assert completed["stage"] == "operational"
     assert completed["status"] == "complete"
