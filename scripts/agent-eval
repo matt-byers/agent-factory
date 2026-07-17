@@ -27,7 +27,6 @@ from agent_creation.eval_providers import (
     EvalProviderRouter,
     EvalRunRequest,
     LangfuseProvider,
-    LangSmithProvider,
     LocalProvider,
 )
 from agent_creation.target_adapter import TargetAdapter
@@ -60,7 +59,7 @@ def main() -> int:
     run.add_argument("--simulator-model", required=True)
     run.add_argument(
         "--destination",
-        choices=("local", "langsmith", "langfuse"),
+        choices=("local", "langfuse"),
         default="local",
     )
     run.add_argument("--dataset-name")
@@ -203,12 +202,6 @@ def main() -> int:
 def _provider(destination: str):
     if destination == "local":
         return LocalProvider(LangSmithRunner.native())
-    if destination == "langsmith":
-        if not os.environ.get("LANGSMITH_API_KEY"):
-            return LangSmithProvider(None, None)
-        from langsmith import Client, evaluate
-
-        return LangSmithProvider(Client(), evaluate)
     if not os.environ.get("LANGFUSE_PUBLIC_KEY") or not os.environ.get("LANGFUSE_SECRET_KEY"):
         return LangfuseProvider(None)
     from langfuse import get_client

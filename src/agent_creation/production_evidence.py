@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime
 import hashlib
-from itertools import islice
 import json
 from pathlib import Path
 from typing import Any
@@ -72,29 +71,6 @@ class PromotionResult:
     created: bool
 
 
-def query_langsmith_traces(client: Any | None, query: EvidenceQuery) -> tuple[ProductionTrace, ...]:
-    _require_client(client, "LangSmith")
-    arguments = _without_none(
-        {
-            "project_name": query.project_name,
-            "filter": query.filter_expression,
-            "start_time": query.from_timestamp,
-            "end_time": query.to_timestamp,
-            "is_root": True,
-            "limit": query.page_size * query.max_pages,
-        }
-    )
-    try:
-        runs = client.list_runs(**arguments)
-        bounded_runs = islice(runs, query.page_size * query.max_pages)
-        return tuple(
-            _normalize_trace("langsmith", run, client.get_run_url(run=run))
-            for run in bounded_runs
-        )
-    except Exception as error:
-        raise _provider_error("langsmith", "query", error) from error
-
-
 def query_langfuse_traces(client: Any | None, query: EvidenceQuery) -> tuple[ProductionTrace, ...]:
     _require_client(client, "Langfuse")
     traces: list[ProductionTrace] = []
@@ -131,16 +107,6 @@ def query_langfuse_traces(client: Any | None, query: EvidenceQuery) -> tuple[Pro
         return tuple(traces)
     except Exception as error:
         raise _provider_error("langfuse", "query", error) from error
-
-
-def select_langsmith_trace(client: Any | None, trace_id: str) -> ProductionTrace:
-    _require_client(client, "LangSmith")
-    _require_trace_id(trace_id)
-    try:
-        run = client.read_run(trace_id)
-        return _normalize_trace("langsmith", run, client.get_run_url(run=run))
-    except Exception as error:
-        raise _provider_error("langsmith", "selection", error) from error
 
 
 def select_langfuse_trace(client: Any | None, trace_id: str) -> ProductionTrace:
@@ -214,15 +180,6 @@ def cleanup_promotion(root: Path, fingerprint: str) -> Path | None:
     del index[fingerprint]
     _atomic_write(index_path, index)
     return path
-
-
-def cleanup_langsmith_trace(client: Any | None, trace_id: str) -> None:
-    _require_client(client, "LangSmith")
-    _require_trace_id(trace_id)
-    try:
-        client.delete_run(trace_id)
-    except Exception as error:
-        raise _provider_error("langsmith", "cleanup", error) from error
 
 
 def cleanup_langfuse_trace(client: Any | None, trace_id: str) -> None:

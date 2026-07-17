@@ -21,7 +21,7 @@ def parser() -> argparse.ArgumentParser:
     setup_command = subcommands.add_parser("setup")
     setup_command.add_argument("--simulator-model", required=True)
     setup_command.add_argument("--judge-model", required=True)
-    setup_command.add_argument("--evidence-mode", choices=("local", "langsmith", "langfuse"), required=True)
+    setup_command.add_argument("--evidence-mode", choices=("local", "langfuse"), required=True)
     setup_command.add_argument("--engineering-loop", choices=("included", "external"), required=True)
 
     start_command = subcommands.add_parser("start")

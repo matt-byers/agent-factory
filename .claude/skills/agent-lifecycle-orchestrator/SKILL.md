@@ -21,7 +21,7 @@ Configure lifecycle providers and engineering-loop selection:
 scripts/agent-lifecycle setup \
   --simulator-model <model> \
   --judge-model <model> \
-  --evidence-mode <local|langsmith|langfuse> \
+  --evidence-mode <local|langfuse> \
   --engineering-loop <included|external>
 ```
 

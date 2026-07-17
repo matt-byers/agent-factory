@@ -55,63 +55,6 @@ class LocalProvider:
         return EvalProviderResult(self.destination, result, (), lambda: None)
 
 
-class LangSmithProvider:
-    destination = "langsmith"
-
-    def __init__(self, client: Any | None, evaluate_fn: Callable[..., Any] | None):
-        self.client = client
-        self.evaluate_fn = evaluate_fn
-
-    def run(self, request: EvalRunRequest) -> EvalProviderResult:
-        if self.client is None or self.evaluate_fn is None:
-            raise EvalProviderError("LangSmith is not configured")
-        try:
-            dataset = self.client.create_dataset(
-                dataset_name=request.dataset_name,
-                description=f"Agent evaluation dataset for {request.experiment_name}",
-            )
-            self.client.create_examples(
-                dataset_id=dataset.id,
-                examples=[_langsmith_example(example) for example in request.examples],
-            )
-            result = self.evaluate_fn(
-                request.target,
-                data=dataset.name,
-                evaluators=request.evaluators,
-                experiment_prefix=request.experiment_name,
-                upload_results=True,
-                client=self.client,
-                metadata=request.metadata,
-            )
-            experiment_name = str(
-                getattr(result, "experiment_name", request.experiment_name)
-            )
-            links = _string_links(
-                getattr(result, "experiment_url", None),
-                getattr(result, "url", None),
-            )
-        except Exception as error:
-            raise _operation_error(self.destination, error) from error
-
-        def cleanup() -> None:
-            try:
-                self.client.delete_project(project_name=experiment_name)
-                self.client.delete_dataset(dataset_id=dataset.id)
-            except Exception as error:
-                raise _operation_error(self.destination, error) from error
-
-        return EvalProviderResult(self.destination, result, links, cleanup)
-
-    def promote_trace(self, trace_id: str, dataset_id: str) -> None:
-        if self.client is None:
-            raise EvalProviderError("LangSmith is not configured")
-        try:
-            run = self.client.read_run(trace_id)
-            self.client.create_example_from_run(run=run, dataset_id=dataset_id)
-        except Exception as error:
-            raise _operation_error(self.destination, error) from error
-
-
 class LangfuseProvider:
     destination = "langfuse"
 
@@ -181,11 +124,6 @@ def provider_capabilities() -> dict[str, dict[str, Any]]:
             "upload_results": False,
             "native_resources": [],
         },
-        "langsmith": {
-            "runner": "LangSmith evaluate/aevaluate",
-            "upload_results": True,
-            "native_resources": ["datasets", "experiments", "scores", "traces"],
-        },
         "langfuse": {
             "runner": "Langfuse dataset.run_experiment",
             "upload_results": True,
@@ -197,14 +135,6 @@ def provider_capabilities() -> dict[str, dict[str, Any]]:
                 "scores",
             ],
         },
-    }
-
-
-def _langsmith_example(example: dict[str, Any]) -> dict[str, Any]:
-    return {
-        key: example[key]
-        for key in ("inputs", "outputs", "metadata")
-        if key in example
     }
 
 
@@ -240,10 +170,6 @@ def _langfuse_trace_ids(result: Any) -> tuple[str, ...]:
         for item in item_results
         if (trace_id := getattr(item, "trace_id", None))
     )
-
-
-def _string_links(*values: Any) -> tuple[str, ...]:
-    return tuple(str(value) for value in values if isinstance(value, str) and value)
 
 
 def _operation_error(destination: str, error: Exception) -> EvalProviderError:

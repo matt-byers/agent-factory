@@ -11,14 +11,14 @@ Run evals and produce evidence. Do not diagnose root causes or recommend target-
 
 ```bash
 scripts/agent-eval list
-scripts/agent-eval run --case <id> --target-command '<json-argument-array>' --simulator-model <provider:model> --judge-model <provider:model> --destination <local|langsmith|langfuse>
+scripts/agent-eval run --case <id> --target-command '<json-argument-array>' --simulator-model <provider:model> --judge-model <provider:model> --destination <local|langfuse>
 scripts/agent-eval run --case <id> --target-command '<json-argument-array>' --simulator-model <provider:model> --judge-model <provider:model> --destination local --artifacts
 scripts/agent-eval baseline --results <complete-native-held-in-run.json> --target-command '<json-argument-array>'
 scripts/agent-eval held-in --results <complete-candidate-held-in-run.json>
 scripts/agent-eval held-out --results <complete-candidate-held-out-run.json>
 ```
 
-Local execution uses LangSmith `evaluate` with local examples and `upload_results=False`. LangSmith and Langfuse destinations each create one provider-native dataset experiment and never duplicate it locally. AgentEvals owns trajectory evaluation, OpenEvals owns supported qualitative evaluators and multi-turn simulation, and repository evaluators are limited to declared deterministic invariants. Provider capabilities, credentials, source links, and sandbox cleanup are documented in `docs/references/eval-result-providers.md`.
+Local execution uses LangSmith `evaluate` with local examples and `upload_results=False`; LangSmith is an internal runner dependency, not a hosted destination, and needs no account or key. The Langfuse destination creates one provider-native dataset experiment and never duplicates it locally. AgentEvals owns trajectory evaluation, OpenEvals owns supported qualitative evaluators and multi-turn simulation, and repository evaluators are limited to declared deterministic invariants. Provider capabilities, credentials, source links, and sandbox cleanup are documented in `docs/references/eval-result-providers.md`.
 
 The target command must implement the JSONL `start`, `turn`, and `end` protocol. Each trial gets a new process. Target, provider, protocol, or evaluator failures are inconclusive and must not be reported as agent-quality rejections.
 

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator
+from typing import Any
 import sys
 
 import pytest
@@ -18,13 +18,10 @@ from agent_creation.production_evidence import (
     EvidenceProviderError,
     EvidenceQuery,
     cleanup_langfuse_trace,
-    cleanup_langsmith_trace,
     cleanup_promotion,
     promote_evidence,
     query_langfuse_traces,
-    query_langsmith_traces,
     select_langfuse_trace,
-    select_langsmith_trace,
 )
 
 
@@ -43,27 +40,6 @@ def trace(identifier: str, *, duplicate_secret: bool = True) -> SimpleNamespace:
         metadata={"api_key": SECRET, "environment": "production"},
         tags=["production", "failure"],
     )
-
-
-class RecordingLangSmithClient:
-    def __init__(self, runs: list[Any] | None = None) -> None:
-        self.runs = runs or []
-        self.calls: list[tuple[str, Any]] = []
-
-    def list_runs(self, **kwargs: Any) -> Iterator[Any]:
-        self.calls.append(("list_runs", kwargs))
-        yield from self.runs
-
-    def read_run(self, run_id: str) -> Any:
-        self.calls.append(("read_run", run_id))
-        return next(item for item in self.runs if item.id == run_id)
-
-    def get_run_url(self, *, run: Any) -> str:
-        self.calls.append(("get_run_url", run.id))
-        return f"https://smith.example/projects/prod/r/{run.id}"
-
-    def delete_run(self, run_id: str) -> None:
-        self.calls.append(("delete_run", run_id))
 
 
 class RecordingLangfuseTraceApi:
@@ -113,28 +89,6 @@ def evidence_query() -> EvidenceQuery:
     )
 
 
-def test_langsmith_query_uses_native_filters_and_bounded_lazy_pagination() -> None:
-    client = RecordingLangSmithClient(
-        [trace("ls-1"), trace("ls-2"), trace("ls-3"), trace("ls-4"), trace("ls-5")]
-    )
-
-    traces = query_langsmith_traces(client, evidence_query())
-
-    assert [item.trace_id for item in traces] == ["ls-1", "ls-2", "ls-3", "ls-4"]
-    assert traces[0].source_link.endswith("/ls-1")
-    assert client.calls[0] == (
-        "list_runs",
-        {
-            "project_name": "production-agent",
-            "filter": 'and(eq(status, "error"), has(tags, "failure"))',
-            "start_time": START,
-            "end_time": END,
-            "is_root": True,
-            "limit": 4,
-        },
-    )
-
-
 def test_langfuse_query_filters_and_pages_through_native_trace_api() -> None:
     client = RecordingLangfuseClient({1: [trace("lf-1"), trace("lf-2")], 2: [trace("lf-3")]})
 
@@ -154,41 +108,19 @@ def test_langfuse_query_filters_and_pages_through_native_trace_api() -> None:
     }
 
 
-def test_exact_trace_selection_retains_provider_source_links() -> None:
-    langsmith = RecordingLangSmithClient([trace("ls-selected")])
+def test_exact_trace_selection_retains_provider_source_link() -> None:
     langfuse = RecordingLangfuseClient({1: [trace("lf-selected")]})
 
-    selected_langsmith = select_langsmith_trace(langsmith, "ls-selected")
     selected_langfuse = select_langfuse_trace(langfuse, "lf-selected")
 
-    assert selected_langsmith.source_link == "https://smith.example/projects/prod/r/ls-selected"
     assert selected_langfuse.source_link == "https://langfuse.example/project/prod/traces/lf-selected"
-    assert ("read_run", "ls-selected") in langsmith.calls
     assert ("get", "lf-selected") in langfuse.trace_api.calls
-
-
-def test_langsmith_selection_supports_native_plural_io_fields() -> None:
-    run = SimpleNamespace(
-        id="native-run",
-        name="agent",
-        start_time=START,
-        inputs={"message": "hello"},
-        outputs={"answer": "world"},
-        extra={"runtime": "production"},
-        tags=["production"],
-    )
-
-    selected = select_langsmith_trace(RecordingLangSmithClient([run]), "native-run")
-
-    assert selected.input == {"message": "hello"}
-    assert selected.output == {"answer": "world"}
-    assert selected.metadata == {"runtime": "production"}
 
 
 @pytest.mark.parametrize("destination", ["diagnostic", "eval"])
 def test_promotion_redacts_nested_secrets_and_deduplicates(tmp_path: Path, destination: str) -> None:
-    selected = select_langsmith_trace(
-        RecordingLangSmithClient([trace("same-trace")]), "same-trace"
+    selected = select_langfuse_trace(
+        RecordingLangfuseClient({1: [trace("same-trace")]}), "same-trace"
     )
 
     first = promote_evidence(tmp_path, selected, destination)
@@ -210,19 +142,16 @@ def test_promotion_redacts_nested_secrets_and_deduplicates(tmp_path: Path, desti
 
 
 def test_cleanup_removes_only_selected_provider_trace_and_local_promotion(tmp_path: Path) -> None:
-    langsmith = RecordingLangSmithClient([trace("temporary-ls")])
     langfuse = RecordingLangfuseClient({1: [trace("temporary-lf")]})
     promotion = promote_evidence(
         tmp_path,
-        select_langsmith_trace(langsmith, "temporary-ls"),
+        select_langfuse_trace(langfuse, "temporary-lf"),
         "eval",
     )
 
-    cleanup_langsmith_trace(langsmith, "temporary-ls")
     cleanup_langfuse_trace(langfuse, "temporary-lf")
     removed = cleanup_promotion(tmp_path, promotion.fingerprint)
 
-    assert ("delete_run", "temporary-ls") in langsmith.calls
     assert ("delete", "temporary-lf") in langfuse.trace_api.calls
     assert langfuse.calls[-1] == ("flush", None)
     assert removed == promotion.path
@@ -233,7 +162,7 @@ def test_cleanup_removes_only_selected_provider_trace_and_local_promotion(tmp_pa
 def test_cleanup_rejects_a_tampered_index_path(tmp_path: Path) -> None:
     promotion = promote_evidence(
         tmp_path,
-        select_langsmith_trace(RecordingLangSmithClient([trace("safe")]), "safe"),
+        select_langfuse_trace(RecordingLangfuseClient({1: [trace("safe")]}), "safe"),
         "eval",
     )
     index_path = tmp_path / "agent-lifecycle/evidence/production-evidence-index.json"
@@ -245,29 +174,22 @@ def test_cleanup_rejects_a_tampered_index_path(tmp_path: Path) -> None:
         cleanup_promotion(tmp_path, promotion.fingerprint)
 
 
-@pytest.mark.parametrize(
-    "operation",
-    [
-        lambda: query_langsmith_traces(None, evidence_query()),
-        lambda: query_langfuse_traces(None, evidence_query()),
-        lambda: select_langsmith_trace(None, "trace"),
-        lambda: select_langfuse_trace(None, "trace"),
-    ],
-)
+@pytest.mark.parametrize("operation", [lambda: query_langfuse_traces(None, evidence_query()), lambda: select_langfuse_trace(None, "trace")])
 def test_unavailable_providers_fail_without_fallback(operation: Any) -> None:
     with pytest.raises(EvidenceProviderError, match="not configured"):
         operation()
 
 
 def test_provider_failures_are_redacted_and_identify_the_operation() -> None:
-    class BrokenClient:
-        def list_runs(self, **_: Any) -> Any:
+    class BrokenTraceApi:
+        def list(self, **_: Any) -> Any:
             raise RuntimeError(f"api_key={SECRET}")
 
+    broken = SimpleNamespace(api=SimpleNamespace(trace=BrokenTraceApi()))
     with pytest.raises(EvidenceProviderError) as error:
-        query_langsmith_traces(BrokenClient(), evidence_query())
+        query_langfuse_traces(broken, evidence_query())
 
-    assert "langsmith query failed" in str(error.value)
+    assert "langfuse query failed" in str(error.value)
     assert SECRET not in str(error.value)
 
 
@@ -281,5 +203,5 @@ def test_skill_documents_query_promote_smoke_cleanup_and_pending_credentials() -
     assert "## Smoke" in skill
     assert "## Cleanup" in skill
     assert "/langfuse" in skill
-    assert "LangSmith" in skill
+    assert "LangSmith" not in skill
     assert "Pending" in skill

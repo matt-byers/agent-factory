@@ -17,7 +17,6 @@ from agent_creation.eval_providers import (
     EvalProviderRouter,
     EvalRunRequest,
     LangfuseProvider,
-    LangSmithProvider,
     LocalProvider,
     provider_capabilities,
 )
@@ -76,59 +75,6 @@ def test_local_provider_uses_langsmith_runner_without_upload() -> None:
             "upload_results": False,
         }
     ]
-
-
-class RecordingLangSmithClient:
-    def __init__(self) -> None:
-        self.calls: list[tuple[Any, ...]] = []
-
-    def create_dataset(self, **kwargs: Any) -> Any:
-        self.calls.append(("create_dataset", kwargs))
-        return SimpleNamespace(id="ls-dataset-id", name=kwargs["dataset_name"])
-
-    def create_examples(self, **kwargs: Any) -> None:
-        self.calls.append(("create_examples", kwargs))
-
-    def read_run(self, trace_id: str) -> Any:
-        self.calls.append(("read_run", trace_id))
-        return SimpleNamespace(id=trace_id)
-
-    def create_example_from_run(self, **kwargs: Any) -> None:
-        self.calls.append(("create_example_from_run", kwargs))
-
-    def delete_project(self, **kwargs: Any) -> None:
-        self.calls.append(("delete_project", kwargs))
-
-    def delete_dataset(self, **kwargs: Any) -> None:
-        self.calls.append(("delete_dataset", kwargs))
-
-
-def test_langsmith_provider_uses_native_dataset_experiment_and_trace_promotion() -> None:
-    client = RecordingLangSmithClient()
-    evaluate_calls: list[dict[str, Any]] = []
-
-    def evaluate(target: Any, **kwargs: Any) -> Any:
-        evaluate_calls.append({"target": target, **kwargs})
-        return SimpleNamespace(
-            experiment_name="candidate-a-native",
-            experiment_url="https://smith.example/experiments/candidate-a-native",
-        )
-
-    provider = LangSmithProvider(client, evaluate)
-    provider.promote_trace("source-trace", "ls-dataset-id")
-    result = provider.run(request())
-
-    assert evaluate_calls[0]["data"] == "temporary-agent-eval"
-    assert evaluate_calls[0]["upload_results"] is True
-    assert evaluate_calls[0]["client"] is client
-    assert result.source_links == ("https://smith.example/experiments/candidate-a-native",)
-    assert ("read_run", "source-trace") in client.calls
-    assert any(call[0] == "create_example_from_run" for call in client.calls)
-
-    result.cleanup()
-
-    assert ("delete_project", {"project_name": "candidate-a-native"}) in client.calls
-    assert ("delete_dataset", {"dataset_id": "ls-dataset-id"}) in client.calls
 
 
 @dataclass
@@ -213,7 +159,6 @@ def test_router_executes_exactly_one_selected_destination() -> None:
     router = EvalProviderRouter(
         {
             "local": RecordingProvider("local"),
-            "langsmith": RecordingProvider("langsmith"),
             "langfuse": RecordingProvider("langfuse"),
         }
     )
@@ -224,10 +169,9 @@ def test_router_executes_exactly_one_selected_destination() -> None:
     assert calls == ["langfuse"]
 
 
-@pytest.mark.parametrize("provider", [LangSmithProvider(None, None), LangfuseProvider(None)])
-def test_unconfigured_provider_fails_without_falling_back(provider: Any) -> None:
+def test_unconfigured_langfuse_fails_without_falling_back() -> None:
     with pytest.raises(EvalProviderError, match="not configured"):
-        provider.run(request())
+        LangfuseProvider(None).run(request())
 
 
 def test_unknown_destination_is_rejected() -> None:
@@ -238,14 +182,9 @@ def test_unknown_destination_is_rejected() -> None:
 def test_provider_capabilities_document_native_ownership() -> None:
     capabilities = provider_capabilities()
 
+    assert set(capabilities) == {"local", "langfuse"}
     assert capabilities["local"]["runner"] == "LangSmith evaluate/aevaluate"
     assert capabilities["local"]["upload_results"] is False
-    assert capabilities["langsmith"]["native_resources"] == [
-        "datasets",
-        "experiments",
-        "scores",
-        "traces",
-    ]
     assert capabilities["langfuse"]["native_resources"] == [
         "traces",
         "observations",
@@ -265,9 +204,11 @@ def test_provider_dependency_and_operator_docs_are_present() -> None:
     ).read_text(encoding="utf-8")
 
     assert "langfuse" in requirements
+    assert "langsmith" in requirements
     assert "Local (`--destination local`)" in documentation
-    assert "LangSmith (`--destination langsmith`)" in documentation
     assert "Langfuse (`--destination langfuse`)" in documentation
+    assert "--destination langsmith" not in documentation
+    assert "LANGSMITH_" not in documentation
     assert "Credentialed provider sandbox smoke: **Pending**" in documentation
     assert "docs/references/eval-result-providers.md" in skill
-    assert "--destination <local|langsmith|langfuse>" in skill
+    assert "--destination <local|langfuse>" in skill
