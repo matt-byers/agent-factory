@@ -5,8 +5,8 @@ A CLI-first, skills-based repository for defining, evaluating, building, and con
 ## Clone setup
 
 ```bash
-git clone <repository-url> self-improving-agent-template
-cd self-improving-agent-template
+git clone <repository-url> agent-factory
+cd agent-factory
 direnv allow
 scripts/agent-setup
 ```
@@ -18,7 +18,7 @@ Eval result destinations and their optional credential setup are documented in [
 ## Repository shape
 
 ```text
-self-improving-agent-template/
+agent-factory/
 ├── README.md
 ├── CLAUDE.md
 ├── AGENTS.md -> CLAUDE.md

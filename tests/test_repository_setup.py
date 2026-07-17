@@ -231,7 +231,7 @@ def test_readme_contains_clone_setup_repository_shape_and_lifecycle() -> None:
     readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "scripts/agent-setup" in readme
-    assert "```text" in readme and "self-improving-agent-template/" in readme
+    assert "```text" in readme and "agent-factory/" in readme
     assert "```mermaid" in readme
     assert "First build" in readme
     assert "Continuous improvement" in readme
