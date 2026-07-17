@@ -22,6 +22,7 @@ RECEIPT_FIELDS = {
     "commit_sha",
     "architecture_changed",
 }
+OPTIONAL_RECEIPT_FIELDS = {"build_plan_sha256"}
 REQUIRED_GATE_KINDS = {"focused_tests", "full_suite", "acceptance_evals", "review"}
 REQUIRED_SOURCE_PATHS = {
     "agent-lifecycle/agent-definition/project-brief.md",
@@ -41,6 +42,7 @@ SURFACE_PREFIXES = {
     "middleware": "agent/middleware/",
     "skills": "agent/skills/",
     "subagents": "agent/subagents/",
+    "agent_tests": "agent/tests/",
 }
 
 
@@ -488,9 +490,10 @@ def validate_receipt(
     if not isinstance(receipt, dict):
         return ["engineering receipt must contain an object"]
     manifest = load_manifest(manifest_path)
-    if set(receipt) != RECEIPT_FIELDS:
+    receipt_fields = set(receipt)
+    if not RECEIPT_FIELDS.issubset(receipt_fields) or receipt_fields - RECEIPT_FIELDS - OPTIONAL_RECEIPT_FIELDS:
         missing = sorted(RECEIPT_FIELDS - set(receipt))
-        unexpected = sorted(set(receipt) - RECEIPT_FIELDS)
+        unexpected = sorted(set(receipt) - RECEIPT_FIELDS - OPTIONAL_RECEIPT_FIELDS)
         details = []
         if missing:
             details.append("missing " + ", ".join(missing))
@@ -503,6 +506,11 @@ def validate_receipt(
         issues.append("receipt handoff id does not match the manifest")
     if receipt.get("manifest_sha256") != digest(manifest_path):
         issues.append("receipt references a stale manifest")
+    plan_sha256 = receipt.get("build_plan_sha256")
+    if plan_sha256 is not None and (
+        not isinstance(plan_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", plan_sha256)
+    ):
+        issues.append("receipt build plan sha256 must be a full hexadecimal digest")
     result_status = receipt.get("result_status")
     if result_status not in {"completed", "failed", "incomplete"}:
         issues.append("receipt result status must be completed, failed, or incomplete")

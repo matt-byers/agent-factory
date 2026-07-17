@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
+from agent_creation.agent_build_loop import BuildLoopError, commit_and_write_receipt, record_stage
+from agent_creation.human_verify import HumanVerificationError, record_manual_evidence
+from agent_creation.spec_plan import BuildPlanError, accept_build_plan, create_build_plan, load_build_state
+
+
+def boolean(value: str) -> bool:
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise argparse.ArgumentTypeError("value must be true or false")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default=str(REPOSITORY_ROOT))
+    commands = parser.add_subparsers(dest="command", required=True)
+    create = commands.add_parser("create-plan")
+    create.add_argument("--attempt", required=True)
+    create.add_argument("--manifest", required=True)
+    create.add_argument("--input", required=True)
+    accept = commands.add_parser("accept-plan")
+    accept.add_argument("--attempt", required=True)
+    status = commands.add_parser("status")
+    status.add_argument("--attempt", required=True)
+    record = commands.add_parser("record")
+    record.add_argument("--attempt", required=True)
+    record.add_argument("--stage", required=True)
+    record.add_argument("--unit")
+    record.add_argument("--evidence", required=True)
+    verify = commands.add_parser("human-verify")
+    verify.add_argument("--attempt", required=True)
+    verify.add_argument("--unit", required=True)
+    verify.add_argument("--smoke", required=True)
+    verify.add_argument("--status", required=True)
+    verify.add_argument("--date", required=True)
+    verify.add_argument("--evidence", required=True)
+    commit = commands.add_parser("commit")
+    commit.add_argument("--attempt", required=True)
+    commit.add_argument("--message", required=True)
+    commit.add_argument("--architecture-changed", required=True, type=boolean)
+    arguments = parser.parse_args()
+    root = Path(arguments.root).resolve()
+    try:
+        if arguments.command == "create-plan":
+            request = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            result = {"plan": str(create_build_plan(root, arguments.attempt, Path(arguments.manifest), request))}
+        elif arguments.command == "accept-plan":
+            result = accept_build_plan(root, arguments.attempt)
+        elif arguments.command == "status":
+            result = load_build_state(root, arguments.attempt)
+        elif arguments.command == "record":
+            evidence = json.loads(Path(arguments.evidence).read_text(encoding="utf-8"))
+            result = record_stage(root, arguments.attempt, arguments.stage, arguments.unit, evidence)
+        elif arguments.command == "human-verify":
+            path = record_manual_evidence(
+                root,
+                arguments.attempt,
+                arguments.unit,
+                arguments.smoke,
+                arguments.status,
+                arguments.evidence,
+                arguments.date,
+            )
+            result = {"plan": str(path), "status": arguments.status}
+        else:
+            path = commit_and_write_receipt(
+                root, arguments.attempt, arguments.message, arguments.architecture_changed
+            )
+            result = {"receipt": str(path)}
+    except (OSError, UnicodeError, json.JSONDecodeError, BuildPlanError, BuildLoopError, HumanVerificationError) as error:
+        print(json.dumps({"status": "invalid", "errors": [str(error)]}, sort_keys=True))
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
