@@ -31,6 +31,7 @@ from agent_creation.eval_providers import (
     LocalProvider,
 )
 from agent_creation.target_adapter import TargetAdapter
+from agent_creation.baseline_evaluation import BaselineEvaluationError, evaluate_baseline
 
 
 def main() -> int:
@@ -38,6 +39,9 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     listing = commands.add_parser("list")
     listing.add_argument("--suite", type=Path, default=REPOSITORY_ROOT / "agent-lifecycle/evals/suite.yaml")
+    baseline = commands.add_parser("baseline")
+    baseline.add_argument("--results", type=Path, required=True)
+    baseline.add_argument("--target-command", required=True, help="JSON array containing the target executable and arguments")
     run = commands.add_parser("run")
     run.add_argument("--suite", type=Path, default=REPOSITORY_ROOT / "agent-lifecycle/evals/suite.yaml")
     run.add_argument("--case", required=True)
@@ -63,6 +67,15 @@ def main() -> int:
         ]
         print(json.dumps(cases, sort_keys=True))
         return 0
+    if arguments.command == "baseline":
+        try:
+            target_command = json.loads(arguments.target_command)
+            result = evaluate_baseline(REPOSITORY_ROOT, arguments.results, target_command)
+        except (OSError, UnicodeError, json.JSONDecodeError, BaselineEvaluationError) as error:
+            print(json.dumps({"status": "invalid", "errors": [str(error)]}, sort_keys=True))
+            return 1
+        print(json.dumps(result, sort_keys=True))
+        return 0 if result["decision"] == "accepted" else 1
     try:
         suite = read_suite(arguments.suite)
     except (OSError, ValueError) as error:

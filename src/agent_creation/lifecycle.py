@@ -110,6 +110,7 @@ def initial_state() -> dict[str, Any]:
         "artifact_fingerprints": {},
         "receipt": None,
         "engineering_attempt": None,
+        "baseline_evaluation": None,
     }
 
 
@@ -169,6 +170,10 @@ def invocation_for(state: dict[str, Any], stage: Stage | None = None) -> str:
         if state.get("engineering_loop") == "included":
             return "/agent-build-loop"
         return "Provide an engineering receipt from the selected external loop"
+    if current.name == "baseline":
+        evaluation = state.get("baseline_evaluation")
+        if isinstance(evaluation, dict) and evaluation.get("route"):
+            return str(evaluation["route"])
     return current.invocation
 
 
@@ -178,6 +183,18 @@ def artifact_digest(path: Path) -> str:
 
 def existing_stage_artifacts(root: Path, stage: Stage) -> list[str]:
     paths = list(stage.required)
+    if stage.name == "baseline" and (root / "agent-lifecycle/evals/agent-baseline.yaml").is_file():
+        paths.append("agent-lifecycle/evals/agent-baseline.yaml")
+        try:
+            baseline = read_json(
+                root / "agent-lifecycle/evals/agent-baseline.yaml", "agent baseline"
+            )
+        except LifecycleError:
+            baseline = {}
+        for field in ("prompt_sha256", "toolset_sha256"):
+            values = baseline.get(field)
+            if isinstance(values, dict):
+                paths.extend(relative for relative in values if isinstance(relative, str))
     if stage.any_of:
         paths.extend(relative for relative in stage.any_of if (root / relative).is_file())
     return paths
@@ -221,6 +238,18 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
         if issues:
             raise LifecycleError("architecture reconciliation is invalid: " + "; ".join(issues))
         return
+    if stage.name == "baseline":
+        from .baseline_evaluation import validate_baseline_decision
+
+        issues = validate_baseline_decision(root)
+        if issues:
+            evaluation = state.get("baseline_evaluation")
+            route = evaluation.get("route") if isinstance(evaluation, dict) else "/eval-agent"
+            raise LifecycleError(
+                "baseline evaluation did not pass: " + "; ".join(issues),
+                {"stage": "baseline", "next": route},
+            )
+        return
     if stage.name not in {"architecture", "diagnosis"}:
         return
     relative = (
@@ -256,6 +285,7 @@ def detect_drift(root: Path, state: dict[str, Any]) -> list[str]:
             state["status"] = "active"
             state["receipt"] = None
             state["engineering_attempt"] = None
+            state["baseline_evaluation"] = None
             state["artifact_fingerprints"] = {
                 name: values
                 for name, values in fingerprints.items()
@@ -277,6 +307,8 @@ def public_state(state: dict[str, Any], changed: list[str] | None = None) -> dic
         response["receipt"] = state["receipt"]
     if state.get("engineering_attempt"):
         response["engineering_attempt"] = state["engineering_attempt"]
+    if state.get("baseline_evaluation"):
+        response["baseline_evaluation"] = state["baseline_evaluation"]
     if changed:
         response["changed"] = changed
     return response

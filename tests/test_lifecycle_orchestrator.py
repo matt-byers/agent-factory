@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from agent_creation.business_value import INPUT_FIELDS, calculate_model, render_markdown
 from agent_creation.eval_design import create_suite_artifacts
 from agent_creation.engineering_handoff import create_handoff, digest, route_manifest
+from agent_creation.baseline_evaluation import evaluate_baseline
 
 
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
@@ -339,7 +340,63 @@ def test_complete_first_build_with_included_loop_and_durable_resume(tmp_path: Pa
     assert interrupted["stage"] == "awaiting_engineering"
     assert interrupted["next"] == "/agent-build-loop"
     assert payload(run(root, "resume", "--receipt", str(write_receipt(root))))["stage"] == "baseline"
-    write(root, "agent-lifecycle/evals/baseline-decision.yaml", json.dumps({"decision": "accepted"}))
+    write(root, "agent/prompts/system.md", "Fixture operational prompt.\n")
+    suite_path = root / "agent-lifecycle/evals/suite.yaml"
+    suite = json.loads(suite_path.read_text(encoding="utf-8"))
+    cases = []
+    for case in suite["cases"]:
+        if case["split"] != "held_in":
+            continue
+        scores = [
+            {"key": grader["id"], "score": 1.0, "threshold": 1.0}
+            for grader in case["graders"]["deterministic"]
+        ]
+        scores.extend(
+            {
+                "key": rubric["id"],
+                "score": rubric["threshold"],
+                "threshold": rubric["threshold"],
+            }
+            for rubric in case["graders"]["rubrics"]
+        )
+        cases.append(
+            {
+                "case_id": case["id"],
+                "trials": [
+                    {
+                        "trial_id": f"{case['id']}:0",
+                        "status": "complete",
+                        "scores": scores,
+                        "errors": [],
+                    }
+                ],
+            }
+        )
+    native_run = root / "agent-lifecycle/evals/native-baseline-run.json"
+    write(
+        root,
+        "agent-lifecycle/evals/native-baseline-run.json",
+        json.dumps(
+            {
+                "version": 1,
+                "status": "complete",
+                "split": "held_in",
+                "suite_sha256": digest(suite_path),
+                "target_command": ["python", "agent/run.py"],
+                "metrics": [
+                    {
+                        "id": metric["id"],
+                        "value": metric["threshold"]
+                        if metric["kind"] != "operational"
+                        else 0,
+                    }
+                    for metric in suite["metrics"]
+                ],
+                "cases": cases,
+            }
+        ),
+    )
+    evaluate_baseline(root, native_run, ["python", "agent/run.py"])
 
     completed = payload(run(root, "next"))
 
