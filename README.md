@@ -12,6 +12,8 @@ scripts/agent-setup
 
 Setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the repository pre-commit gate, and validates Claude/Codex adapters. Add one model-provider key for each selected simulator or judge directly to `.env`. Add LangSmith or Langfuse credentials only when selecting that evidence destination. Never put credentials in chat.
 
+Eval result destinations and their optional credential setup are documented in [docs/references/eval-result-providers.md](docs/references/eval-result-providers.md).
+
 ## Repository shape
 
 ```text

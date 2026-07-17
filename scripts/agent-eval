@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -21,6 +22,14 @@ from agent_creation.eval_runtime import (
     run_native_simulated_trial,
     write_diagnostic_artifacts,
 )
+from agent_creation.eval_providers import (
+    EvalProviderError,
+    EvalProviderRouter,
+    EvalRunRequest,
+    LangfuseProvider,
+    LangSmithProvider,
+    LocalProvider,
+)
 from agent_creation.target_adapter import TargetAdapter
 
 
@@ -35,6 +44,12 @@ def main() -> int:
     run.add_argument("--target-command", required=True, help="JSON array containing the target executable and arguments")
     run.add_argument("--judge-model", required=True)
     run.add_argument("--simulator-model", required=True)
+    run.add_argument(
+        "--destination",
+        choices=("local", "langsmith", "langfuse"),
+        default="local",
+    )
+    run.add_argument("--dataset-name")
     run.add_argument("--timeout", type=float, default=30.0)
     run.add_argument("--artifacts", action="store_true")
     run.add_argument("--output-dir", type=Path, default=REPOSITORY_ROOT / "agent-lifecycle/evals/runs")
@@ -102,27 +117,60 @@ def main() -> int:
             }
             for index, seed in enumerate(selected["seeds"])
         ]
-        native_result = LangSmithRunner.native().evaluate_local(
-            target,
-            examples,
-            evaluators,
-            experiment_prefix=f"agent-eval-{selected['id']}",
+        experiment_name = f"agent-eval-{selected['id']}"
+        provider = _provider(arguments.destination)
+        native_result = EvalProviderRouter({arguments.destination: provider}).run(
+            arguments.destination,
+            EvalRunRequest(
+                dataset_name=arguments.dataset_name or experiment_name,
+                experiment_name=experiment_name,
+                target=target,
+                examples=examples,
+                evaluators=evaluators,
+                metadata={"case": selected["id"], "split": selected.get("split")},
+            ),
         )
         inconclusive = any(artifact["status"] != "complete" or artifact["errors"] for artifact in captured)
         result = {
             "status": "inconclusive" if inconclusive else "complete",
             "case": selected["id"],
             "trial_count": len(examples),
+            "destination": native_result.destination,
+            "source_links": list(native_result.source_links),
         }
         if arguments.artifacts:
             result["artifact_directory"] = str(write_diagnostic_artifacts(arguments.output_dir, captured))
-        if hasattr(native_result, "experiment_name"):
-            result["experiment"] = str(native_result.experiment_name)
+        if hasattr(native_result.native_result, "experiment_name"):
+            result["experiment"] = str(native_result.native_result.experiment_name)
         print(json.dumps(result, sort_keys=True))
         return 1 if inconclusive else 0
-    except (ImportError, OSError, TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
+    except (
+        EvalProviderError,
+        ImportError,
+        OSError,
+        TypeError,
+        ValueError,
+        KeyError,
+        json.JSONDecodeError,
+    ) as error:
         print(json.dumps({"status": "inconclusive", "errors": [str(error)]}, sort_keys=True))
         return 1
+
+
+def _provider(destination: str):
+    if destination == "local":
+        return LocalProvider(LangSmithRunner.native())
+    if destination == "langsmith":
+        if not os.environ.get("LANGSMITH_API_KEY"):
+            return LangSmithProvider(None, None)
+        from langsmith import Client, evaluate
+
+        return LangSmithProvider(Client(), evaluate)
+    if not os.environ.get("LANGFUSE_PUBLIC_KEY") or not os.environ.get("LANGFUSE_SECRET_KEY"):
+        return LangfuseProvider(None)
+    from langfuse import get_client
+
+    return LangfuseProvider(get_client())
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 pytest
 agentevals
+langfuse
 langsmith
 openevals
