@@ -32,3 +32,11 @@ For every outcome, capture at least one linked metric with:
 - Data source, accountable owner, and measurement cadence.
 
 Do not accept proxy activity as value without connecting it to a user or business outcome. Ask a focused follow-up whenever a required value is unknown.
+
+## Model commercial value and unit economics
+
+For conservative, base, and upside scenarios, capture eligible volume, expected adoption, baseline and target success, attribution, revenue and gross margin, time savings and loaded labor cost, error or rework avoidance, loss avoidance, variable run cost, fixed cost, and implementation cost.
+
+Record an assumption, source, and owner for every input. Assign each revenue, time-saving, rework-avoidance, and loss-avoidance benefit a distinct economic unit; reject double counting when two benefits claim the same unit.
+
+Review annual gross and net value, contribution per adopted task, value per successful outcome, maximum viable run cost, break-even volume, adoption and quality, and payback period. Resolve contradictions and scenario boundaries before accepting the model.

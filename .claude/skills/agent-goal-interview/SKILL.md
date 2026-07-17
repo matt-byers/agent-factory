@@ -13,13 +13,15 @@ Read [references/interview-guide.md](references/interview-guide.md) before inter
 2. Ask focused questions in small groups. Restate uncertain answers and resolve contradictions rather than filling gaps yourself.
 3. Capture a structured interview object matching the guide. If required users, outcomes, or metrics remain absent, report `needs_follow_up` and ask the precise missing questions.
 4. Save the structured response to a temporary JSON file outside committed artifacts.
-5. Render and validate:
+5. Model commercial value and unit economics using the guide. Save the structured model to a temporary JSON file, then render and validate all artifacts:
 
 ```bash
 scripts/agent-goal-interview render --input <interview.json>
 scripts/agent-goal-interview validate
+scripts/agent-business-value calculate --input <business-model.json>
+scripts/agent-business-value validate
 ```
 
-6. Report the two artifact paths and any unresolved assumptions. Run `scripts/agent-lifecycle next` only after validation succeeds.
+6. Report the four artifact paths and any unresolved assumptions. Run `scripts/agent-lifecycle next` only after both validators succeed.
 
 Never invent a baseline, target, source, owner, failure cost, or commercial outcome. Keep surrounding application code, databases, UI, infrastructure, and deployment outside the editable agent surface.

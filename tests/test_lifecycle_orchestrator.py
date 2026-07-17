@@ -3,11 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
+from agent_creation.business_value import INPUT_FIELDS, calculate_model, render_markdown
+
+
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
 
 
@@ -90,7 +96,54 @@ Fixture risk.
             }
         ),
     )
-    write(root, "agent-lifecycle/agent-definition/business-value-model.yaml", "{}\n")
+    values = {
+        "eligible_volume": 1000,
+        "adoption_rate": 0.5,
+        "baseline_success_rate": 0.5,
+        "target_success_rate": 0.6,
+        "attribution_rate": 1,
+        "revenue_per_success": 10,
+        "gross_margin_rate": 1,
+        "minutes_saved_per_adopted_task": 0,
+        "loaded_labor_cost_per_hour": 0,
+        "error_rate_reduction": 0,
+        "cost_per_error": 0,
+        "loss_rate_reduction": 0,
+        "loss_per_event": 0,
+        "variable_run_cost_per_adopted_task": 0,
+        "annual_fixed_cost": 0,
+        "implementation_cost": 0,
+    }
+    scenario = {
+        **values,
+        "evidence": {
+            field: {"assumption": "Fixture", "source": "Fixture", "owner": "Fixture"}
+            for field in INPUT_FIELDS
+        },
+    }
+    projection = calculate_model(
+        {
+            "version": 1,
+            "currency": "USD",
+            "economic_units": {
+                "revenue": "gross profit",
+                "time_savings": "labor capacity",
+                "rework_avoidance": "rework cost",
+                "loss_avoidance": "loss exposure",
+            },
+            "scenarios": {name: scenario for name in ("conservative", "base", "upside")},
+        }
+    )
+    write(
+        root,
+        "agent-lifecycle/agent-definition/business-value-model.yaml",
+        json.dumps(projection, indent=2, sort_keys=True) + "\n",
+    )
+    write(
+        root,
+        "agent-lifecycle/agent-definition/business-value-model.md",
+        render_markdown(projection),
+    )
 
 
 def write_architecture_artifacts(root: Path, handoff_id: str = "handoff-1") -> None:

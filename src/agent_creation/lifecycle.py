@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .business_value import MARKDOWN_PATH as BUSINESS_MARKDOWN_PATH
+from .business_value import YAML_PATH as BUSINESS_YAML_PATH
+from .business_value import validate_projection
 from .goal_definition import BRIEF_PATH, METRICS_PATH, validate_artifacts
 
 
@@ -175,6 +178,9 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
         issues = validate_artifacts(root / BRIEF_PATH, root / METRICS_PATH)
         if issues:
             raise LifecycleError("goal artifacts are invalid: " + "; ".join(issues))
+        business_issues = validate_projection(root / BUSINESS_YAML_PATH, root / BUSINESS_MARKDOWN_PATH)
+        if business_issues:
+            raise LifecycleError("business value artifacts are invalid: " + "; ".join(business_issues))
         return
     if stage.name not in {"architecture", "diagnosis"}:
         return
