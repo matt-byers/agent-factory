@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .goal_definition import BRIEF_PATH, METRICS_PATH, validate_artifacts
+
 
 STATE_PATH = Path("agent-lifecycle/state.yaml")
 SETUP_PATH = Path("agent-lifecycle/setup.yaml")
@@ -169,6 +171,11 @@ def snapshot_stage(root: Path, state: dict[str, Any], stage: Stage) -> None:
 
 
 def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) -> None:
+    if stage.name == "goal_definition":
+        issues = validate_artifacts(root / BRIEF_PATH, root / METRICS_PATH)
+        if issues:
+            raise LifecycleError("goal artifacts are invalid: " + "; ".join(issues))
+        return
     if stage.name not in {"architecture", "diagnosis"}:
         return
     relative = (

@@ -34,8 +34,62 @@ def write(root: Path, relative: str, content: str = "fixture\n") -> Path:
 
 
 def write_goal_artifacts(root: Path) -> None:
-    write(root, "agent-lifecycle/agent-definition/project-brief.md")
-    write(root, "agent-lifecycle/agent-definition/success-metrics.yaml", "{}\n")
+    write(
+        root,
+        "agent-lifecycle/agent-definition/project-brief.md",
+        """# Agent Project Brief
+
+Status: complete
+
+## Purpose
+Fixture purpose.
+## Target Users
+Fixture users.
+## User Problem
+Fixture problem.
+## Current Workflow
+Fixture workflow.
+## Agent Scope
+Fixture scope.
+## Accuracy, Latency, and Cost Priorities
+Fixture priorities.
+## Risks and Failure Cost
+Fixture risk.
+## Success Outcomes
+- `fixture-outcome` (user): Fixture outcome.
+""",
+    )
+    write(
+        root,
+        "agent-lifecycle/agent-definition/success-metrics.yaml",
+        json.dumps(
+            {
+                "version": 1,
+                "status": "complete",
+                "outcomes": [
+                    {
+                        "id": "fixture-outcome",
+                        "type": "user",
+                        "description": "Fixture outcome",
+                        "observation": "Fixture observation",
+                    }
+                ],
+                "metrics": [
+                    {
+                        "id": "fixture-metric",
+                        "name": "Fixture metric",
+                        "outcome_ids": ["fixture-outcome"],
+                        "direction": "increase",
+                        "baseline": {"value": 1, "unit": "count", "source": "fixture"},
+                        "target": {"value": 2, "unit": "count"},
+                        "data_source": "fixture",
+                        "owner": "fixture",
+                        "cadence": "weekly",
+                    }
+                ],
+            }
+        ),
+    )
     write(root, "agent-lifecycle/agent-definition/business-value-model.yaml", "{}\n")
 
 

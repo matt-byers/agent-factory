@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Goal Interview"
+  short_description: "Define an agent goal and measurable success"
+  default_prompt: "Interview me to define the agent purpose, scope, tradeoffs, outcomes, and success metrics."
