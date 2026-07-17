@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from getpass import getpass
+import json
+from pathlib import Path
+import sys
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
+from agent_creation.onboarding import (
+    ENVIRONMENT_NAMES,
+    OnboardingError,
+    environment_status,
+    set_environment_value,
+)
+
+
+def parser() -> argparse.ArgumentParser:
+    command = argparse.ArgumentParser()
+    command.add_argument("--env-file", default=str(REPOSITORY_ROOT / ".env"))
+    subcommands = command.add_subparsers(dest="command", required=True)
+
+    status = subcommands.add_parser("status")
+    status.add_argument("name", nargs="?", choices=ENVIRONMENT_NAMES)
+    set_command = subcommands.add_parser("set")
+    set_command.add_argument("name", choices=ENVIRONMENT_NAMES)
+    return command
+
+
+def main() -> int:
+    arguments = parser().parse_args()
+    env_file = Path(arguments.env_file).resolve()
+    try:
+        if arguments.command == "set":
+            value = getpass(f"{arguments.name}: ")
+            set_environment_value(env_file, arguments.name, value)
+            print(json.dumps({"name": arguments.name, "configured": True}))
+            return 0
+
+        statuses = environment_status(env_file)
+        if arguments.name:
+            statuses = {arguments.name: statuses[arguments.name]}
+        print(json.dumps(statuses, sort_keys=True))
+        return 0
+    except OnboardingError as error:
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

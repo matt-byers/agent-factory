@@ -19,10 +19,11 @@ It is a CLI-first, skills-based workspace for Claude Code and Codex that support
 git clone <repository-url> agent-factory
 cd agent-factory
 direnv allow
-scripts/agent-setup
 ```
 
-`direnv allow` adds the repository `bin/` directory to the local command path, including the exact `testagent` command. Setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the repository pre-commit gate, and validates Claude/Codex adapters. Add one model-provider key for each selected simulator or judge directly to `.env`. Add Langfuse credentials only when selecting the Langfuse evidence destination. Never put credentials in chat.
+Then open Claude Code or Codex. Invoke `/onboard` to run `scripts/agent-setup`, configure model-provider and optional Langfuse credentials one at a time, learn the two Agent Factory flows, and hand off to the first-build lifecycle. Credentials are entered through a hidden local terminal prompt and never pasted into chat.
+
+`direnv allow` adds the repository `bin/` directory to the local command path, including the exact `testagent` command. Repository setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the pre-commit gate, and validates Claude/Codex adapters.
 
 Eval result destinations and their optional credential setup are documented in [docs/references/eval-result-providers.md](docs/references/eval-result-providers.md).
 
@@ -67,6 +68,7 @@ agent-factory/
 ├── bin/
 ├── .claude/
 │   ├── skills/
+│   │   ├── onboard/
 │   │   ├── agent-lifecycle-orchestrator/
 │   │   ├── agent-goal-interview/
 │   │   ├── agent-eval-designer/
@@ -115,7 +117,8 @@ flowchart TD
         direction TB
         subgraph F["First build"]
             direction TB
-            SETUP["setup"] --> GOAL["/agent-goal-interview<br/>brief + commercial value model"]
+            ONBOARD["/onboard<br/>repository + credentials"] --> SETUP["lifecycle setup"]
+            SETUP --> GOAL["/agent-goal-interview<br/>brief + commercial value model"]
             GOAL --> DESIGN["/agent-eval-designer<br/>cases + rubrics + simulated user"]
             DESIGN --> ARCH["/agent-architecture-planner<br/>architecture picture + build handoff"]
             ARCH --> BUILD{"Selected engineering loop"}

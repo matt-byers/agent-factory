@@ -1,10 +1,10 @@
-# Self-Improving Agent Template
+# Agent Factory
 
 This repository creates, evaluates, and improves an agent harness and its context. Work through repository-owned skills from a terminal. Do not add a UI or modify the surrounding application.
 
 ## Setup
 
-Run `direnv allow` and `scripts/agent-setup` after cloning. Direnv exposes repository commands from `bin/`; setup creates the local Python environment, preserves or creates `.env`, installs the repository pre-commit gate, and validates Claude/Codex discovery. Put credentials directly in `.env`; never paste secret values into chat or committed artifacts.
+Run `direnv allow`, then invoke `/onboard` after cloning. Onboarding runs repository setup, guides credential configuration one value at a time through a hidden local prompt, explains both lifecycle flows, and hands off to `/agent-lifecycle-orchestrator`. Never paste secret values into chat or committed artifacts.
 
 ## Shared harness ownership
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Onboard"
+  short_description: "Set up Agent Factory and start the first agent flow"
+  default_prompt: "Use /onboard to configure Agent Factory and show me how to start building my agent."
