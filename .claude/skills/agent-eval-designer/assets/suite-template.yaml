@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "status": "complete",
+  "name": "replace-with-suite-name",
+  "metrics": [
+    {"id": "hard-pass-rate", "name": "Deterministic pass rate", "kind": "deterministic", "aggregation": "pass_rate", "threshold": 1.0},
+    {"id": "quality-score", "name": "Qualitative quality", "kind": "qualitative", "aggregation": "mean", "threshold": 0.8},
+    {"id": "turn-count", "name": "Conversation turns", "kind": "operational", "aggregation": "mean", "threshold": 6}
+  ],
+  "cases": []
+}

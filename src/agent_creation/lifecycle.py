@@ -9,6 +9,7 @@ from typing import Any
 from .business_value import MARKDOWN_PATH as BUSINESS_MARKDOWN_PATH
 from .business_value import YAML_PATH as BUSINESS_YAML_PATH
 from .business_value import validate_projection
+from .eval_design import SUITE_PATH, read_suite, validate_suite
 from .goal_definition import BRIEF_PATH, METRICS_PATH, validate_artifacts
 
 
@@ -181,6 +182,14 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
         business_issues = validate_projection(root / BUSINESS_YAML_PATH, root / BUSINESS_MARKDOWN_PATH)
         if business_issues:
             raise LifecycleError("business value artifacts are invalid: " + "; ".join(business_issues))
+        return
+    if stage.name == "eval_design":
+        try:
+            issues = validate_suite(read_suite(root / SUITE_PATH))
+        except ValueError as error:
+            raise LifecycleError(f"eval suite is invalid: {error}") from error
+        if issues:
+            raise LifecycleError("eval suite is invalid: " + "; ".join(issues))
         return
     if stage.name not in {"architecture", "diagnosis"}:
         return

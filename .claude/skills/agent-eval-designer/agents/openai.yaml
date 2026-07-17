@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Eval Designer"
+  short_description: "Design robust agent evaluation suites"
+  default_prompt: "Use $agent-eval-designer to design representative and held-out eval cases for my agent."

@@ -12,6 +12,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from agent_creation.business_value import INPUT_FIELDS, calculate_model, render_markdown
+from agent_creation.eval_design import create_suite_artifacts
 
 
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
@@ -156,6 +157,47 @@ def write_architecture_artifacts(root: Path, handoff_id: str = "handoff-1") -> N
     )
 
 
+def write_eval_artifacts(root: Path) -> None:
+    eval_case = {
+        "id": "fixture-case",
+        "split": "held_in",
+        "tags": ["smoke", "capability", "regression", "edge", "positive", "negative", "representative", "adversarial"],
+        "trials": 1,
+        "seeds": [1],
+        "input": {"initial_user_message": "Fixture request"},
+        "simulated_user": {
+            "persona": "Fixture persona",
+            "private_truth": [{"id": "fact", "value": "Fixture fact", "reveal_on": ["fact"]}],
+            "disclosure_policy": {"mode": "progressive", "max_facts_per_turn": 1, "fallback": "next_unrevealed"},
+            "termination": {"success_condition": "Fixture done", "max_turns": 2, "stall_turns": 1},
+        },
+        "expected": {
+            "outcome": "Fixture outcome",
+            "trajectory": {"required_tools": [], "forbidden_tools": [], "ordered_tools": []},
+        },
+        "graders": {
+            "deterministic": [{"id": "fixture-check", "check": "no_error", "arguments": {}}],
+            "rubrics": [{"id": "fixture-rubric", "criterion": "Fixture quality", "evidence": "final_output", "threshold": 0.8}],
+        },
+    }
+    held_out = json.loads(json.dumps(eval_case))
+    held_out.update(id="fixture-held-out", split="held_out", tags=["held-out", "edge", "adversarial"])
+    create_suite_artifacts(
+        {
+            "version": 1,
+            "status": "complete",
+            "name": "fixture-suite",
+            "metrics": [
+                {"id": "hard-pass", "name": "Hard pass", "kind": "deterministic", "aggregation": "pass_rate", "threshold": 1.0},
+                {"id": "quality", "name": "Quality", "kind": "qualitative", "aggregation": "mean", "threshold": 0.8},
+                {"id": "turns", "name": "Turns", "kind": "operational", "aggregation": "mean", "threshold": 2},
+            ],
+            "cases": [eval_case, held_out],
+        },
+        root,
+    )
+
+
 def write_receipt(root: Path, name: str = "receipt.json", handoff_id: str = "handoff-1") -> Path:
     return write(
         root,
@@ -178,7 +220,7 @@ def advance_first_build_to_engineering(root: Path, engineering_loop: str = "incl
     assert run(root, "start", "first-build", "--engineering-loop", engineering_loop).returncode == 0
     write_goal_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "eval_design"
-    write(root, "agent-lifecycle/evals/suite.yaml", "{}\n")
+    write_eval_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write_architecture_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "engineering"
@@ -280,7 +322,7 @@ def test_upstream_artifact_change_rewinds_to_earliest_affected_stage(tmp_path: P
     assert run(root, "start", "first-build").returncode == 0
     write_goal_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "eval_design"
-    write(root, "agent-lifecycle/evals/suite.yaml", "{}\n")
+    write_eval_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write(root, "agent-lifecycle/agent-definition/project-brief.md", "changed upstream definition\n")
 
@@ -349,7 +391,7 @@ def test_unapproved_handoff_cannot_route_to_engineering(tmp_path: Path) -> None:
     assert run(root, "start", "first-build").returncode == 0
     write_goal_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "eval_design"
-    write(root, "agent-lifecycle/evals/suite.yaml", "{}\n")
+    write_eval_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write_architecture_artifacts(root)
     write(

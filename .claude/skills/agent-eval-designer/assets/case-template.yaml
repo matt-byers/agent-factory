@@ -1,0 +1,24 @@
+{
+  "id": "replace-with-case-id",
+  "split": "held_in",
+  "tags": ["capability", "positive", "representative"],
+  "trials": 1,
+  "seeds": [1],
+  "input": {"initial_user_message": "Replace with the public opening."},
+  "simulated_user": {
+    "persona": "Replace with a concise persona.",
+    "private_truth": [
+      {"id": "private-fact", "value": "Replace with private truth.", "reveal_on": ["trigger phrase"]}
+    ],
+    "disclosure_policy": {"mode": "progressive", "max_facts_per_turn": 1, "fallback": "next_unrevealed"},
+    "termination": {"success_condition": "Replace with an observable stopping condition.", "max_turns": 6, "stall_turns": 2}
+  },
+  "expected": {
+    "outcome": "Replace with the expected outcome.",
+    "trajectory": {"required_tools": [], "forbidden_tools": [], "ordered_tools": []}
+  },
+  "graders": {
+    "deterministic": [{"id": "required-check", "check": "replace_with_check", "arguments": {}}],
+    "rubrics": [{"id": "quality", "criterion": "Replace with one narrow criterion.", "evidence": "final_output", "threshold": 0.8}]
+  }
+}
