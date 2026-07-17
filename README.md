@@ -121,7 +121,7 @@ flowchart TD
 ## Harness checks
 
 ```bash
-scripts/agent-config/sync_agent.py --from claude behavior-review/live-transcript-reviewer
+scripts/agent-config/sync_agent.py --from claude live-transcript-reviewer
 scripts/agent-config/verify_agent_config.py
 scripts/test-agent-config.sh
 ```

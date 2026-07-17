@@ -235,6 +235,8 @@ def test_readme_contains_clone_setup_repository_shape_and_lifecycle() -> None:
     assert "```mermaid" in readme
     assert "First build" in readme
     assert "Continuous improvement" in readme
+    assert "--from claude live-transcript-reviewer" in readme
+    assert "behavior-review/live-transcript-reviewer" not in readme
 
 
 def test_environment_contract_is_generic_and_ignored() -> None:
