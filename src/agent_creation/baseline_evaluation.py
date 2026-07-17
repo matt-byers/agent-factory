@@ -7,7 +7,7 @@ from typing import Any
 
 from .engineering_handoff import digest
 from .eval_design import SUITE_PATH, read_suite, validate_suite
-from .eval_runtime import decide_gate
+from .eval_runtime import comparison_summary, decide_gate
 from .lifecycle import load_state, save_state
 
 
@@ -285,6 +285,25 @@ def evaluate_baseline(
         if not gate.proceed:
             owner = "target_agent" if gate.decision == "reject" else "harness"
             issues.append(issue(owner, gate.reason))
+    comparison: dict[str, Any] = {}
+    if not issues:
+        held_in_cases = [case for case in suite["cases"] if case["split"] == "held_in"]
+        try:
+            comparison = comparison_summary(
+                artifacts,
+                deterministic_keys={
+                    grader["id"]
+                    for case in held_in_cases
+                    for grader in case["graders"]["deterministic"]
+                },
+                quality_keys={
+                    rubric["id"]
+                    for case in held_in_cases
+                    for rubric in case["graders"]["rubrics"]
+                },
+            )
+        except ValueError as error:
+            issues.append(issue("harness", str(error)))
     if issues:
         owner = selected_owner(issues)
         decision = {
@@ -321,6 +340,7 @@ def evaluate_baseline(
             "run_sha256": digest(resolved_run),
             "prompt_sha256": prompts,
             "toolset_sha256": tools,
+            "comparison": comparison,
         }
         atomic_json(root / BASELINE_PATH, baseline)
         decision = {

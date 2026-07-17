@@ -303,6 +303,58 @@ def decide_gate(
     return GateDecision("accept", "all required evals passed", True)
 
 
+def comparison_summary(
+    artifacts: list[dict[str, Any]],
+    *,
+    deterministic_keys: set[str],
+    quality_keys: set[str],
+) -> dict[str, Any]:
+    if deterministic_keys & quality_keys:
+        raise EvalRuntimeError("deterministic and quality score keys must be distinct")
+    hard_results: list[float] = []
+    quality_results: list[float] = []
+    latencies: list[float] = []
+    costs: list[float] = []
+    for artifact in artifacts:
+        scores = artifact.get("scores")
+        metrics = artifact.get("metrics")
+        if not isinstance(scores, list) or not isinstance(metrics, dict):
+            raise EvalRuntimeError("native comparison artifact is missing scores or metrics")
+        for score in scores:
+            if not isinstance(score, dict) or not isinstance(score.get("key"), str):
+                continue
+            key = score["key"]
+            try:
+                value = float(score["score"])
+                threshold = float(score["threshold"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise EvalRuntimeError(f"native comparison score is malformed: {key}") from error
+            if not math.isfinite(value) or not math.isfinite(threshold):
+                raise EvalRuntimeError(f"native comparison score is not finite: {key}")
+            if key in deterministic_keys:
+                hard_results.append(1.0 if value >= threshold else 0.0)
+            if key in quality_keys:
+                quality_results.append(value)
+        try:
+            latency = float(metrics["latency_ms"])
+            cost = float(metrics["cost"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise EvalRuntimeError("native comparison latency or cost is missing") from error
+        if not math.isfinite(latency) or not math.isfinite(cost) or latency < 0 or cost < 0:
+            raise EvalRuntimeError("native comparison latency or cost is invalid")
+        latencies.append(latency)
+        costs.append(cost)
+    if not artifacts or not hard_results or not quality_results:
+        raise EvalRuntimeError("native comparison measurements are incomplete")
+    return {
+        "quality": sum(quality_results) / len(quality_results),
+        "hard_invariant_pass_rate": sum(hard_results) / len(hard_results),
+        "latency_ms": sum(latencies) / len(latencies),
+        "cost": sum(costs) / len(costs),
+        "trial_count": len(artifacts),
+    }
+
+
 def _score_index(artifacts: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, float]]:
     indexed: dict[tuple[str, str], dict[str, float]] = {}
     for artifact in artifacts:

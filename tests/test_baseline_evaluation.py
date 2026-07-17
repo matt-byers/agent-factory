@@ -275,6 +275,11 @@ def test_non_agent_failures_route_to_the_owning_repair_path(
         (lambda artifact: artifact["cases"].pop(), "data", "held-in case"),
         (lambda artifact: artifact["cases"][0]["trials"][0]["scores"].pop(), "eval", "grader score"),
         (lambda artifact: artifact["metrics"].pop(), "eval", "aggregate metric"),
+        (
+            lambda artifact: artifact["cases"][0]["trials"][0].pop("metrics"),
+            "harness",
+            "comparison artifact",
+        ),
         (lambda artifact: artifact["metrics"][0].update(value=float("nan")), "eval", "not finite"),
         (lambda artifact: artifact.update(suite_sha256="0" * 64), "data", "suite"),
     ],

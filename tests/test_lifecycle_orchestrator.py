@@ -15,6 +15,7 @@ from agent_creation.business_value import INPUT_FIELDS, calculate_model, render_
 from agent_creation.eval_design import create_suite_artifacts
 from agent_creation.engineering_handoff import create_handoff, digest, route_manifest
 from agent_creation.baseline_evaluation import evaluate_baseline
+from agent_creation.validation_gates import evaluate_held_in, evaluate_held_out
 
 
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
@@ -363,11 +364,12 @@ def test_complete_first_build_with_included_loop_and_durable_resume(tmp_path: Pa
             {
                 "case_id": case["id"],
                 "trials": [
-                    {
-                        "trial_id": f"{case['id']}:0",
-                        "status": "complete",
-                        "scores": scores,
-                        "errors": [],
+                        {
+                            "trial_id": f"{case['id']}:0",
+                            "status": "complete",
+                            "metrics": {"latency_ms": 0, "cost": 0},
+                            "scores": scores,
+                            "errors": [],
                     }
                 ],
             }
@@ -463,9 +465,72 @@ def test_complete_improvement_lifecycle(tmp_path: Path) -> None:
     write_architecture_artifacts(root, "improvement-1", "improvement")
     assert payload(run(root, "next"))["stage"] == "awaiting_engineering"
     assert payload(run(root, "resume", "--receipt", str(write_receipt(root, handoff_id="improvement-1"))))["stage"] == "held_in"
-    write(root, "agent-lifecycle/evals/held-in-decision.yaml", json.dumps({"decision": "accepted"}))
+    write(root, "agent/prompts/system.md", "Improved fixture prompt.\n")
+    suite_path = root / "agent-lifecycle/evals/suite.yaml"
+    suite = json.loads(suite_path.read_text(encoding="utf-8"))
+    write(
+        root,
+        "agent-lifecycle/evals/agent-baseline.yaml",
+        json.dumps(
+            {
+                "version": 1,
+                "status": "operational",
+                "target_command": ["python", "agent/run.py"],
+                "suite_sha256": digest(suite_path),
+                "run_path": "agent-lifecycle/evals/original.json",
+                "run_sha256": "a" * 64,
+                "prompt_sha256": {},
+                "toolset_sha256": {},
+                "comparison": {
+                    "quality": 0.8,
+                    "hard_invariant_pass_rate": 1.0,
+                    "latency_ms": 1.0,
+                    "cost": 0.01,
+                    "trial_count": 1,
+                },
+            }
+        ),
+    )
+
+    def native_run(case_id: str, split: str) -> dict:
+        return {
+            "version": 1,
+            "status": "complete",
+            "split": split,
+            "suite_sha256": digest(suite_path),
+            "target_command": ["python", "agent/run.py"],
+            "cases": [
+                {
+                    "case_id": case_id,
+                    "trials": [
+                        {
+                            "trial_id": f"{case_id}:0",
+                            "status": "complete",
+                            "metrics": {"latency_ms": 1.0, "cost": 0.01},
+                            "scores": [
+                                {"key": "fixture-check", "score": 1.0, "threshold": 1.0},
+                                {"key": "fixture-rubric", "score": 0.8, "threshold": 0.8},
+                            ],
+                            "errors": [],
+                        }
+                    ],
+                }
+            ],
+        }
+
+    held_in_run = write(
+        root,
+        "agent-lifecycle/evals/improvement-held-in.json",
+        json.dumps(native_run("fixture-case", "held_in")),
+    )
+    assert evaluate_held_in(root, held_in_run)["decision"] == "accepted"
     assert payload(run(root, "next"))["stage"] == "held_out"
-    write(root, "agent-lifecycle/evals/held-out-decision.yaml", json.dumps({"decision": "accepted"}))
+    held_out_run = write(
+        root,
+        "agent-lifecycle/evals/improvement-held-out.json",
+        json.dumps(native_run("fixture-held-out", "held_out")),
+    )
+    assert evaluate_held_out(root, held_out_run)["decision"] == "accepted"
     assert payload(run(root, "next"))["stage"] == "learning"
     write(root, "agent-lifecycle/evidence/eval-loop-learning.yaml", "{}\n")
 

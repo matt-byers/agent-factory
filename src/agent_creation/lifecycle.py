@@ -197,6 +197,10 @@ def existing_stage_artifacts(root: Path, stage: Stage) -> list[str]:
                 paths.extend(relative for relative in values if isinstance(relative, str))
     if stage.any_of:
         paths.extend(relative for relative in stage.any_of if (root / relative).is_file())
+    if stage.name == "held_in" and (root / "agent-lifecycle/evals/held-out-release.json").is_file():
+        paths.append("agent-lifecycle/evals/held-out-release.json")
+    if stage.name == "held_out" and (root / "agent-lifecycle/evals/agent-baseline.yaml").is_file():
+        paths.append("agent-lifecycle/evals/agent-baseline.yaml")
     return paths
 
 
@@ -248,6 +252,16 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
             raise LifecycleError(
                 "baseline evaluation did not pass: " + "; ".join(issues),
                 {"stage": "baseline", "next": route},
+            )
+        return
+    if stage.name in {"held_in", "held_out"}:
+        from .validation_gates import validate_validation_decision
+
+        issues = validate_validation_decision(root, stage.name)
+        if issues:
+            raise LifecycleError(
+                f"{stage.name.replace('_', '-')} validation did not complete: "
+                + "; ".join(issues)
             )
         return
     if stage.name not in {"architecture", "diagnosis"}:
