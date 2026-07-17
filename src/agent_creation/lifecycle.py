@@ -11,6 +11,12 @@ from .business_value import YAML_PATH as BUSINESS_YAML_PATH
 from .business_value import validate_projection
 from .eval_design import SUITE_PATH, read_suite, validate_suite
 from .goal_definition import BRIEF_PATH, METRICS_PATH, validate_artifacts
+from .engineering_handoff import (
+    EngineeringHandoffError,
+    digest as handoff_digest,
+    route_manifest,
+    validate_receipt as validate_engineering_receipt,
+)
 
 
 STATE_PATH = Path("agent-lifecycle/state.yaml")
@@ -45,8 +51,7 @@ FIRST_BUILD = (
             "agent-lifecycle/handoffs/build-handoff.yaml",
         ),
     ),
-    Stage("engineering", ""),
-    Stage("waiting_for_receipt", ""),
+    Stage("awaiting_engineering", ""),
     Stage("baseline", "/eval-agent", ("agent-lifecycle/evals/baseline-decision.yaml",)),
     Stage("operational", "Lifecycle complete"),
 )
@@ -61,8 +66,7 @@ IMPROVEMENT = (
         ),
     ),
     Stage("diagnosis", "/agent-behavior-review", ("agent-lifecycle/handoffs/improvement-handoff.yaml",)),
-    Stage("engineering", ""),
-    Stage("waiting_for_receipt", ""),
+    Stage("awaiting_engineering", ""),
     Stage("held_in", "/eval-agent", ("agent-lifecycle/evals/held-in-decision.yaml",)),
     Stage("held_out", "/eval-agent", ("agent-lifecycle/evals/held-out-decision.yaml",)),
     Stage("learning", "/eval-compound-learnings", ("agent-lifecycle/evidence/eval-loop-learning.yaml",)),
@@ -142,7 +146,7 @@ def stage_for(state: dict[str, Any]) -> Stage:
 
 def invocation_for(state: dict[str, Any], stage: Stage | None = None) -> str:
     current = stage or stage_for(state)
-    if current.name in {"engineering", "waiting_for_receipt"}:
+    if current.name == "awaiting_engineering":
         if state.get("engineering_loop") == "included":
             return "/agent-build-loop"
         return "Provide an engineering receipt from the selected external loop"
@@ -201,6 +205,10 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
     handoff = read_json(root / relative, "engineering handoff")
     if handoff.get("approval_status") != "approved" or not isinstance(handoff.get("handoff_id"), str):
         raise LifecycleError("engineering routing requires an approved handoff with a handoff_id")
+    try:
+        route_manifest(root, "build" if state.get("lifecycle") == "first-build" else "improvement")
+    except EngineeringHandoffError as error:
+        raise LifecycleError("engineering handoff is invalid: " + "; ".join(error.issues)) from error
 
 
 def detect_drift(root: Path, state: dict[str, Any]) -> list[str]:
@@ -267,7 +275,7 @@ def setup(
 
 def start(root: Path, lifecycle: str, engineering_loop: str | None) -> dict[str, Any]:
     state = load_state(root)
-    if state.get("status") == "active" or state.get("stage") == "waiting_for_receipt":
+    if state.get("status") == "active" or state.get("stage") == "awaiting_engineering":
         raise LifecycleError("a lifecycle is already active; use status or resume")
     selected_loop = engineering_loop
     if selected_loop is None and (root / SETUP_PATH).exists():
@@ -301,7 +309,7 @@ def advance(root: Path) -> dict[str, Any]:
     current = stage_for(state)
     if current.name == "operational":
         raise LifecycleError("lifecycle is already operational")
-    if current.name == "waiting_for_receipt":
+    if current.name == "awaiting_engineering":
         raise LifecycleError("waiting for an engineering receipt; use resume --receipt")
     missing = missing_artifacts(root, current)
     if missing:
@@ -314,23 +322,12 @@ def advance(root: Path) -> dict[str, Any]:
     flow = flow_for(state)
     next_stage = flow[flow.index(current) + 1]
     state["stage"] = next_stage.name
-    if next_stage.name == "waiting_for_receipt":
-        state["status"] = "waiting"
+    if next_stage.name == "awaiting_engineering":
+        state["status"] = "active" if state.get("engineering_loop") == "included" else "waiting"
     elif next_stage.name == "operational":
         state["status"] = "complete"
     save_state(root, state)
     return public_state(state)
-
-
-def expected_handoff_id(root: Path, state: dict[str, Any]) -> str | None:
-    relative = (
-        "agent-lifecycle/handoffs/build-handoff.yaml"
-        if state.get("lifecycle") == "first-build"
-        else "agent-lifecycle/handoffs/improvement-handoff.yaml"
-    )
-    payload = read_json(root / relative, "engineering handoff")
-    value = payload.get("handoff_id")
-    return value if isinstance(value, str) and value else None
 
 
 def validate_receipt(root: Path, state: dict[str, Any], receipt_path: Path) -> dict[str, Any]:
@@ -345,31 +342,27 @@ def validate_receipt(root: Path, state: dict[str, Any], receipt_path: Path) -> d
     if not resolved_receipt.is_file():
         raise LifecycleError("engineering receipt must be a regular repository file")
     receipt = read_json(resolved_receipt, "engineering receipt")
-    required = {
-        "handoff_id",
-        "result_status",
-        "changed_files",
-        "test_evidence",
-        "review_outcome",
-        "commit_sha",
-        "architecture_changed",
-    }
-    if receipt.get("result_status") != "completed" or required - set(receipt):
-        raise LifecycleError("resume requires a completed receipt with all contract fields")
-    if receipt.get("handoff_id") != expected_handoff_id(root, state):
-        raise LifecycleError("engineering receipt does not match the active handoff")
+    kind = "build" if state.get("lifecycle") == "first-build" else "improvement"
+    try:
+        manifest_path = route_manifest(root, kind)
+    except EngineeringHandoffError as error:
+        raise LifecycleError("engineering handoff is invalid: " + "; ".join(error.issues)) from error
+    issues = validate_engineering_receipt(receipt, manifest_path)
+    if issues:
+        raise LifecycleError("resume requires a valid completed receipt: " + "; ".join(issues))
     return receipt
 
 
 def resume(root: Path, receipt_path: Path) -> dict[str, Any]:
     state = load_state(root)
-    if state.get("stage") != "waiting_for_receipt":
+    if state.get("stage") != "awaiting_engineering":
         raise LifecycleError("not waiting for an engineering receipt")
     receipt = validate_receipt(root, state, receipt_path)
     state["receipt"] = {
         "path": str(receipt_path.resolve().relative_to(root.resolve())),
-        "sha256": artifact_digest(receipt_path.resolve()),
+        "sha256": handoff_digest(receipt_path.resolve()),
         "handoff_id": receipt["handoff_id"],
+        "architecture_changed": receipt["architecture_changed"],
     }
     state["stage"] = "baseline" if state["lifecycle"] == "first-build" else "held_in"
     state["status"] = "active"

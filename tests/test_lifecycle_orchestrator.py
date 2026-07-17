@@ -13,6 +13,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from agent_creation.business_value import INPUT_FIELDS, calculate_model, render_markdown
 from agent_creation.eval_design import create_suite_artifacts
+from agent_creation.engineering_handoff import create_handoff, digest, route_manifest
 
 
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
@@ -147,13 +148,73 @@ Fixture risk.
     )
 
 
-def write_architecture_artifacts(root: Path, handoff_id: str = "handoff-1") -> None:
+def handoff_request(handoff_id: str, kind: str) -> dict:
+    return {
+        "version": 1,
+        "handoff_id": handoff_id,
+        "kind": kind,
+        "approval_status": "approved",
+        "editable_paths": [{"path": "agent/prompts/system.md", "surface": "prompts"}],
+        "recommendations": [
+            {
+                "id": "fixture-change",
+                "requirement_or_evidence": [
+                    "agent-lifecycle/agent-definition/project-brief.md#purpose",
+                    "agent-lifecycle/evals/suite.yaml#fixture-case",
+                ],
+                "likely_cause_or_design_need": "Fixture design need.",
+                "proposed_change": "Update the fixture agent prompt.",
+                "source_rationale": {
+                    "summary": "Fixture source rationale.",
+                    "references": [
+                        "docs/references/agent-building-best-practices.md#tools",
+                        "agent-lifecycle/architecture/decisions.md#decision",
+                    ],
+                },
+                "expected_effect": {
+                    "user": "Fixture user effect.",
+                    "business": "Fixture business effect.",
+                },
+                "acceptance_eval_ids": ["fixture-case"],
+            }
+        ],
+        "acceptance_gates": [
+            {
+                "id": "focused-tests",
+                "kind": "focused_tests",
+                "command": "pytest focused",
+                "success_criteria": "Focused tests pass.",
+            },
+            {
+                "id": "full-suite",
+                "kind": "full_suite",
+                "command": "pytest",
+                "success_criteria": "Full suite passes.",
+            },
+            {
+                "id": "acceptance-evals",
+                "kind": "acceptance_evals",
+                "eval_ids": ["fixture-case"],
+                "success_criteria": "Acceptance eval passes.",
+            },
+            {
+                "id": "review",
+                "kind": "review",
+                "success_criteria": "Review passes.",
+            },
+        ],
+    }
+
+
+def write_architecture_artifacts(
+    root: Path, handoff_id: str = "handoff-1", kind: str = "build"
+) -> None:
     write(root, "agent-lifecycle/architecture/agent-architecture.md")
     write(root, "agent-lifecycle/architecture/decisions.md")
-    write(
+    write(root, "docs/references/agent-building-best-practices.md", "# Best practices\n\n## Tools\nFixture.\n")
+    create_handoff(
         root,
-        "agent-lifecycle/handoffs/build-handoff.yaml",
-        json.dumps({"handoff_id": handoff_id, "approval_status": "approved"}),
+        handoff_request(handoff_id, kind),
     )
 
 
@@ -199,12 +260,16 @@ def write_eval_artifacts(root: Path) -> None:
 
 
 def write_receipt(root: Path, name: str = "receipt.json", handoff_id: str = "handoff-1") -> Path:
+    kind = "build" if (root / "agent-lifecycle/handoffs/build-handoff.yaml").is_file() else "improvement"
+    manifest_path = route_manifest(root, kind)
     return write(
         root,
         f"agent-lifecycle/receipts/{name}",
         json.dumps(
             {
+                "version": 1,
                 "handoff_id": handoff_id,
+                "manifest_sha256": digest(manifest_path),
                 "result_status": "completed",
                 "changed_files": ["agent/prompts/system.md"],
                 "test_evidence": ["focused and full suites passed"],
@@ -223,7 +288,7 @@ def advance_first_build_to_engineering(root: Path, engineering_loop: str = "incl
     write_eval_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write_architecture_artifacts(root)
-    assert payload(run(root, "next"))["stage"] == "engineering"
+    assert payload(run(root, "next"))["stage"] == "awaiting_engineering"
 
 
 def test_setup_persists_cli_selections_and_is_idempotent(tmp_path: Path) -> None:
@@ -270,11 +335,9 @@ def test_complete_first_build_with_included_loop_and_durable_resume(tmp_path: Pa
     root = tmp_path / "target"
     advance_first_build_to_engineering(root)
 
-    route = payload(run(root, "next"))
-    assert route["stage"] == "waiting_for_receipt"
-    assert route["next"] == "/agent-build-loop"
     interrupted = payload(run(root, "status"))
-    assert interrupted["stage"] == "waiting_for_receipt"
+    assert interrupted["stage"] == "awaiting_engineering"
+    assert interrupted["next"] == "/agent-build-loop"
     assert payload(run(root, "resume", "--receipt", str(write_receipt(root))))["stage"] == "baseline"
     write(root, "agent-lifecycle/evals/baseline-decision.yaml", json.dumps({"decision": "accepted"}))
 
@@ -307,9 +370,9 @@ def test_external_loop_pauses_and_resumes_with_same_receipt_contract(tmp_path: P
     root = tmp_path / "target"
     advance_first_build_to_engineering(root, "external")
 
-    waiting = payload(run(root, "next"))
+    waiting = payload(run(root, "status"))
 
-    assert waiting["stage"] == "waiting_for_receipt"
+    assert waiting["stage"] == "awaiting_engineering"
     assert waiting["next"] == "Provide an engineering receipt from the selected external loop"
     receipt = write_receipt(root, "external.json")
     resumed = run(root, "resume", "--receipt", str(receipt))
@@ -338,13 +401,10 @@ def test_complete_improvement_lifecycle(tmp_path: Path) -> None:
     assert run(root, "start", "improvement", "--engineering-loop", "included").returncode == 0
     write(root, "agent-lifecycle/evidence/selected-evidence.yaml", "{}\n")
     assert payload(run(root, "next"))["stage"] == "diagnosis"
-    write(
-        root,
-        "agent-lifecycle/handoffs/improvement-handoff.yaml",
-        json.dumps({"handoff_id": "improvement-1", "approval_status": "approved"}),
-    )
-    assert payload(run(root, "next"))["stage"] == "engineering"
-    assert payload(run(root, "next"))["stage"] == "waiting_for_receipt"
+    write_goal_artifacts(root)
+    write_eval_artifacts(root)
+    write_architecture_artifacts(root, "improvement-1", "improvement")
+    assert payload(run(root, "next"))["stage"] == "awaiting_engineering"
     assert payload(run(root, "resume", "--receipt", str(write_receipt(root, handoff_id="improvement-1"))))["stage"] == "held_in"
     write(root, "agent-lifecycle/evals/held-in-decision.yaml", json.dumps({"decision": "accepted"}))
     assert payload(run(root, "next"))["stage"] == "held_out"
@@ -376,14 +436,14 @@ def test_invalid_transitions_are_rejected(tmp_path: Path, arguments: tuple[str, 
 def test_resume_rejects_malformed_or_failed_receipt_without_advancing(tmp_path: Path) -> None:
     root = tmp_path / "target"
     advance_first_build_to_engineering(root)
-    assert payload(run(root, "next"))["stage"] == "waiting_for_receipt"
+    assert payload(run(root, "status"))["stage"] == "awaiting_engineering"
     malformed = write(root, "agent-lifecycle/receipts/malformed.json", json.dumps({"result_status": "failed"}))
 
     result = run(root, "resume", "--receipt", str(malformed))
 
     assert result.returncode == 1
     assert "completed receipt" in payload(result)["error"]
-    assert payload(run(root, "status"))["stage"] == "waiting_for_receipt"
+    assert payload(run(root, "status"))["stage"] == "awaiting_engineering"
 
 
 def test_unapproved_handoff_cannot_route_to_engineering(tmp_path: Path) -> None:

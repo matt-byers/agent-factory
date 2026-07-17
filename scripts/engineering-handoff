@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
+from agent_creation.engineering_handoff import (
+    EngineeringHandoffError,
+    create_handoff,
+    load_manifest,
+    validate_receipt,
+    verify_handoff,
+)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default=str(REPOSITORY_ROOT))
+    commands = parser.add_subparsers(dest="command", required=True)
+    create = commands.add_parser("create")
+    create.add_argument("--input", required=True)
+    verify = commands.add_parser("verify")
+    verify.add_argument("--manifest", required=True)
+    receipt = commands.add_parser("validate-receipt")
+    receipt.add_argument("--manifest", required=True)
+    receipt.add_argument("--receipt", required=True)
+    arguments = parser.parse_args()
+    root = Path(arguments.root).resolve()
+    try:
+        if arguments.command == "create":
+            request = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            paths = create_handoff(root, request)
+            result = {
+                "status": "complete",
+                "handoff_id": request["handoff_id"],
+                "artifacts": {key: str(path) for key, path in paths.items()},
+            }
+        elif arguments.command == "verify":
+            errors = verify_handoff(Path(arguments.manifest))
+            result = {"status": "valid" if not errors else "invalid", "errors": errors}
+            print(json.dumps(result, sort_keys=True))
+            return 0 if not errors else 1
+        else:
+            manifest = Path(arguments.manifest)
+            payload = json.loads(Path(arguments.receipt).read_text(encoding="utf-8"))
+            errors = validate_receipt(payload, manifest)
+            result = {"status": "valid" if not errors else "invalid", "errors": errors}
+            print(json.dumps(result, sort_keys=True))
+            return 0 if not errors else 1
+    except (OSError, UnicodeError, json.JSONDecodeError, EngineeringHandoffError) as error:
+        result = {
+            "status": "invalid",
+            "errors": error.issues if isinstance(error, EngineeringHandoffError) else [str(error)],
+        }
+        print(json.dumps(result, sort_keys=True))
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -51,3 +51,15 @@ Maintain only:
 Keep one Mermaid diagram in `agent-architecture.md`. It must show only the target runtime agent, its internal model/workflow/agent components, tools, and runtime context. Exclude test agents, evals, graders, lifecycle skills, engineering loops, production-evidence collection, and surrounding application architecture. Record databases, APIs, user interfaces, and other application systems as external dependencies in prose, not editable diagram components or recommendations.
 
 Link each important choice to the goal, metric, value-model, eval, and best-practice evidence that supports it. After implementation changes, reconcile the same diagram and decisions file. For renamed agents or tools, use ordinary repository search and replace; do not create rename maps or parallel projections.
+
+## Create the engineering handoff
+
+After the architecture recommendation is approved, prepare the engineering handoff request. Give every recommendation its requirement or observed evidence, likely cause or design need, proposed change, source-linked rationale, expected user and business effect, and acceptance eval IDs. Declare only exact editable files under the target agent surfaces; do not use directories, globs, databases, UI paths, or other surrounding-application files.
+
+Include focused tests, the full deterministic suite, acceptance evals, and review gates, then run:
+
+```bash
+scripts/engineering-handoff create --input <handoff-request.json>
+```
+
+Do not replace an existing handoff identifier. Pass the generated manifest, implementation specification, acceptance gates, and bound receipt template to the selected engineering loop.

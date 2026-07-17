@@ -1,0 +1,11 @@
+{
+  "architecture_changed": null,
+  "changed_files": [],
+  "commit_sha": null,
+  "handoff_id": "<handoff-id>",
+  "manifest_sha256": "<manifest-sha256>",
+  "result_status": "pending",
+  "review_outcome": "pending",
+  "test_evidence": [],
+  "version": 1
+}
