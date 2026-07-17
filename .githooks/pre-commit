@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+RELEVANT=false
+
+while IFS= read -r staged_path; do
+  case "$staged_path" in
+    CLAUDE.md|AGENTS.md|.claude/skills/*|.agents/skills|.claude/agents/*|.codex/agents/*|scripts/agent-config/*|scripts/agent-setup|scripts/test-agent-config.sh|.githooks/pre-commit)
+      RELEVANT=true
+      break
+      ;;
+  esac
+done < <(git diff --cached --name-only)
+
+if [[ "$RELEVANT" == false ]]; then
+  exit 0
+fi
+
+exec python3 "$ROOT/scripts/agent-config/verify_agent_config.py" --root "$ROOT"

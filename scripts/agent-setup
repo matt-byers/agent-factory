@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SKIP_DEPENDENCIES=false
+
+if [[ "${1:-}" == "--skip-dependencies" ]]; then
+  SKIP_DEPENDENCIES=true
+elif [[ $# -gt 0 ]]; then
+  printf 'usage: scripts/agent-setup [--skip-dependencies]\n' >&2
+  exit 2
+fi
+
+cd "$ROOT"
+
+if [[ ! -L AGENTS.md ]]; then
+  if [[ -e AGENTS.md ]]; then
+    printf 'AGENTS.md exists but is not the expected symlink\n' >&2
+    exit 1
+  fi
+  ln -s CLAUDE.md AGENTS.md
+fi
+
+mkdir -p .agents .claude/skills
+if [[ ! -L .agents/skills ]]; then
+  if [[ -e .agents/skills ]]; then
+    printf '.agents/skills exists but is not the expected symlink\n' >&2
+    exit 1
+  fi
+  ln -s ../.claude/skills .agents/skills
+fi
+
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  printf 'created .env from .env.example; fill required values locally\n'
+else
+  printf 'preserved existing .env\n'
+fi
+
+if [[ "$SKIP_DEPENDENCIES" == false ]]; then
+  if [[ ! -x .venv/bin/python ]]; then
+    python3 -m venv .venv
+  fi
+  .venv/bin/python -m pip install -r requirements.txt
+fi
+
+scripts/agent-config/install_git_hooks.sh
+python3 scripts/agent-config/verify_agent_config.py
+printf 'setup complete\n'
