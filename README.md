@@ -1,6 +1,27 @@
 # Agent Factory
 
-A CLI-first, skills-based repository for defining, evaluating, building, and continuously improving an agent harness and its context. It includes a small engineering loop, but that loop can be replaced by another engineering process or a standard coding agent.
+Agent Factory gives anyone a structured starting point for building an AI agent with an evals-first approach. It turns an agent idea into a clear definition of user and commercial value, measurable success criteria, representative evals, a recommended architecture, and an implementation-ready plan. The aim is to ensure the agent is built and improved against evidence of actual value—not just whether its output looks plausible.
+
+It is a CLI-first, skills-based workspace for Claude Code and Codex. The included skills guide the user through the complete agent lifecycle:
+
+1. Define the user problem, agent goal, scope, trade-offs, and commercial value model.
+2. Turn those goals into test cases, rubrics, held-out evals, and a simulated user before implementation.
+3. Recommend an appropriate model call, workflow, agent, or multi-agent architecture using maintained agent-building best practices.
+4. Produce a bounded engineering handoff and implement it through the included tests-first build loop, a preferred external engineering loop, or a standard coding agent.
+5. Establish a measured baseline, then improve the agent using eval failures, exploratory `testagent` conversations, and production traces.
+
+The result is a durable set of artifacts that explains what the agent should do, why it should exist, how it creates measurable value, what should be built, and how success will be judged. Those artifacts live alongside the target agent, allowing the lifecycle to resume from repository state instead of relying on chat history.
+
+Agent Factory focuses only on the target agent harness and context: prompts, model and tool configuration, context management, workflows, agent state, skills, and subagents. It does not build the surrounding product, UI, database, authentication, infrastructure, or services that the agent uses.
+
+## What it enables
+
+- Start from an agent idea without needing an existing eval framework or agent-development process.
+- Connect behavior metrics to user outcomes and unit economics such as time saved, revenue, cost, gross profit, or avoided loss.
+- Design evals before implementation so architecture and engineering decisions are anchored to explicit success criteria.
+- Test any target-agent runtime through a small language-agnostic protocol, locally or with Langfuse-backed evaluation and production evidence.
+- Diagnose failures before changing the agent and validate candidate improvements against held-in and held-out cases.
+- Use the included mini engineering loop or swap in any preferred coding workflow without changing the lifecycle artifacts.
 
 ## Clone setup
 
