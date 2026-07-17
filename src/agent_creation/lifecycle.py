@@ -52,6 +52,15 @@ FIRST_BUILD = (
         ),
     ),
     Stage("awaiting_engineering", ""),
+    Stage(
+        "architecture_reconciliation",
+        "/agent-architecture-planner reconcile",
+        (
+            "agent-lifecycle/architecture/agent-architecture.md",
+            "agent-lifecycle/architecture/decisions.md",
+            "agent-lifecycle/architecture/reconciliation.json",
+        ),
+    ),
     Stage("baseline", "/eval-agent", ("agent-lifecycle/evals/baseline-decision.yaml",)),
     Stage("operational", "Lifecycle complete"),
 )
@@ -67,6 +76,15 @@ IMPROVEMENT = (
     ),
     Stage("diagnosis", "/agent-behavior-review", ("agent-lifecycle/handoffs/improvement-handoff.yaml",)),
     Stage("awaiting_engineering", ""),
+    Stage(
+        "architecture_reconciliation",
+        "/agent-architecture-planner reconcile",
+        (
+            "agent-lifecycle/architecture/agent-architecture.md",
+            "agent-lifecycle/architecture/decisions.md",
+            "agent-lifecycle/architecture/reconciliation.json",
+        ),
+    ),
     Stage("held_in", "/eval-agent", ("agent-lifecycle/evals/held-in-decision.yaml",)),
     Stage("held_out", "/eval-agent", ("agent-lifecycle/evals/held-out-decision.yaml",)),
     Stage("learning", "/eval-compound-learnings", ("agent-lifecycle/evidence/eval-loop-learning.yaml",)),
@@ -195,6 +213,13 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
             raise LifecycleError(f"eval suite is invalid: {error}") from error
         if issues:
             raise LifecycleError("eval suite is invalid: " + "; ".join(issues))
+        return
+    if stage.name == "architecture_reconciliation":
+        from .resume_reconcile import validate_reconciliation
+
+        issues = validate_reconciliation(root)
+        if issues:
+            raise LifecycleError("architecture reconciliation is invalid: " + "; ".join(issues))
         return
     if stage.name not in {"architecture", "diagnosis"}:
         return
@@ -420,14 +445,32 @@ def resume(root: Path, receipt_path: Path) -> dict[str, Any]:
     if state.get("stage") != "awaiting_engineering":
         raise LifecycleError("not waiting for an engineering receipt")
     receipt = validate_receipt(root, state, receipt_path)
+    kind = "build" if state.get("lifecycle") == "first-build" else "improvement"
+    try:
+        manifest_path = route_manifest(root, kind)
+    except EngineeringHandoffError as error:
+        raise LifecycleError("engineering handoff is invalid: " + "; ".join(error.issues)) from error
     state["receipt"] = {
         "path": str(receipt_path.resolve().relative_to(root.resolve())),
         "sha256": handoff_digest(receipt_path.resolve()),
         "handoff_id": receipt["handoff_id"],
         "architecture_changed": receipt["architecture_changed"],
+        "manifest_path": str(manifest_path.relative_to(root)),
+        "manifest_sha256": handoff_digest(manifest_path),
+        "architecture_before_sha256": {
+            "agent-lifecycle/architecture/agent-architecture.md": artifact_digest(
+                root / "agent-lifecycle/architecture/agent-architecture.md"
+            ),
+            "agent-lifecycle/architecture/decisions.md": artifact_digest(
+                root / "agent-lifecycle/architecture/decisions.md"
+            ),
+        },
     }
     state["engineering_attempt"] = None
-    state["stage"] = "baseline" if state["lifecycle"] == "first-build" else "held_in"
+    if receipt["architecture_changed"]:
+        state["stage"] = "architecture_reconciliation"
+    else:
+        state["stage"] = "baseline" if state["lifecycle"] == "first-build" else "held_in"
     state["status"] = "active"
     save_state(root, state)
     return public_state(state)

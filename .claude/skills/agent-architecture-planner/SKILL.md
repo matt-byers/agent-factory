@@ -43,6 +43,17 @@ scripts/agent-architecture-planner plan --input <request.json>
 scripts/agent-architecture-planner validate
 ```
 
+When lifecycle status returns `architecture_reconciliation`, inspect only the implemented files named by the accepted receipt, prepare the same deterministic architecture request from the implemented runtime, and run:
+
+```bash
+scripts/agent-architecture-planner reconcile \
+  --receipt <accepted-receipt.json> \
+  --input <request.json>
+scripts/agent-lifecycle next
+```
+
+The reconciliation is receipt- and implementation-bound. Do not reconcile an unchanged, stale, failed, tampered, or surrounding-application receipt.
+
 Maintain only:
 
 - `agent-lifecycle/architecture/agent-architecture.md`

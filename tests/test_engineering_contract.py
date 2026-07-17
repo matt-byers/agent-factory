@@ -299,7 +299,7 @@ def test_architecture_change_status_survives_successful_lifecycle_resume(tmp_pat
 
     result = resume(root, receipt_path)
 
-    assert result["stage"] == "baseline"
+    assert result["stage"] == "architecture_reconciliation"
     assert result["receipt"]["architecture_changed"] is True
 
 

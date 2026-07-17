@@ -43,6 +43,7 @@ scripts/agent-lifecycle resume --receipt agent-lifecycle/receipts/<receipt>.json
 4. When the included loop is selected, invoke `/agent-build-loop` with the active handoff. When an external loop is selected, provide that loop the same handoff and receipt contract.
 5. At `awaiting_engineering`, run `scripts/engineering-handoff prepare --kind <build|improvement>` and pass that unchanged contract to the selected loop. Run the included loop immediately or pause while the selected external loop works.
 6. Resume either engineering path with `resume --receipt` after validating its manifest-bound receipt. A failed or incomplete result retains its evidence at `agent-lifecycle/attempts/` without advancing.
-7. If `status` reports changed upstream artifacts, follow its rewound stage rather than continuing from stale downstream work.
+7. If the receipt declares `architecture_changed`, invoke `/agent-architecture-planner reconcile` and advance only after its receipt-bound picture and decision evidence validates. Otherwise continue directly to baseline or held-in validation without rewriting architecture.
+8. If `status` reports changed upstream artifacts, follow its rewound stage rather than continuing from stale downstream work.
 
 Never edit lifecycle state by hand, skip a missing artifact, accept a failed or mismatched receipt, or expose held-out evidence before its gate.
