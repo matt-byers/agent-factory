@@ -43,6 +43,7 @@ class EvalError:
 class TrialResult:
     trial_id: str
     status: str
+    session_context: dict[str, Any] = field(default_factory=dict)
     assistant_messages: list[dict[str, Any]] = field(default_factory=list)
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     tool_results: list[dict[str, Any]] = field(default_factory=list)
@@ -95,6 +96,7 @@ class TargetAdapter:
                 stage,
             )
             self._require_type(response, "started", stage)
+            self._capture_session_context(result, response)
             for turn_index, message in enumerate(user_messages):
                 stage = "turn"
                 response = self._exchange(
@@ -221,6 +223,16 @@ class TargetAdapter:
             raise ProtocolFailure(EvalError("malformed_output", "turn", "trace_refs must be a string list"))
         result.trace_refs.extend(trace_refs)
 
+    def _capture_session_context(self, result: TrialResult, response: dict[str, Any]) -> None:
+        context = response.get("session_context")
+        if context is None:
+            return
+        if not isinstance(context, dict):
+            raise ProtocolFailure(
+                EvalError("malformed_output", "start", "session_context must be an object")
+            )
+        result.session_context = context
+
     def _stop(self, process: subprocess.Popen[str] | None) -> None:
         if process is None:
             return
@@ -265,6 +277,7 @@ class TargetSession:
             "start",
         )
         self.adapter._require_type(response, "started", "start")
+        self.adapter._capture_session_context(self.result, response)
         return self
 
     def turn(self, message: str | dict[str, Any]) -> dict[str, Any]:

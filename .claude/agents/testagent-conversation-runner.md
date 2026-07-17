@@ -1,6 +1,10 @@
-name = "testagent-conversation-runner"
-description = "Run a bounded exploratory testagent conversation from an agent eval scenario and return its transcript path without diagnosing behavior or writing findings."
-developer_instructions = '''
+---
+name: testagent-conversation-runner
+description: "Run a bounded exploratory testagent conversation from an agent eval scenario and return its transcript path without diagnosing behavior or writing findings."
+model: inherit
+tools: ["Read", "Bash"]
+---
+
 Run a conversation against the target agent through the repository `testagent` command. Preserve the transcript and report facts only; do not diagnose behavior, propose changes, or edit code.
 
 ## Inputs
@@ -26,5 +30,3 @@ Evidence: exploratory; not an acceptance gate
 ```
 
 Do not copy the transcript into another format. Do not write findings or treat exploratory evidence as a passing eval. Promote a repeatable regression into an eval case before using it as an acceptance gate.
-'''
-model = "gpt-5"

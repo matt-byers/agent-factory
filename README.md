@@ -7,10 +7,11 @@ A CLI-first, skills-based repository for defining, evaluating, building, and con
 ```bash
 git clone <repository-url> self-improving-agent-template
 cd self-improving-agent-template
+direnv allow
 scripts/agent-setup
 ```
 
-Setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the repository pre-commit gate, and validates Claude/Codex adapters. Add one model-provider key for each selected simulator or judge directly to `.env`. Add LangSmith or Langfuse credentials only when selecting that evidence destination. Never put credentials in chat.
+`direnv allow` adds the repository `bin/` directory to the local command path, including the exact `testagent` command. Setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the repository pre-commit gate, and validates Claude/Codex adapters. Add one model-provider key for each selected simulator or judge directly to `.env`. Add LangSmith or Langfuse credentials only when selecting that evidence destination. Never put credentials in chat.
 
 Eval result destinations and their optional credential setup are documented in [docs/references/eval-result-providers.md](docs/references/eval-result-providers.md).
 
