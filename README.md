@@ -1,6 +1,6 @@
 # Agent Factory
 
-Agent Factory gives anyone a structured, evals-first way to build an AI agent. It turns an idea into a clear user problem and commercial value model, measurable success criteria, representative evals, a recommended architecture, and an implementation-ready plan—so the agent is built against evidence of actual value rather than plausible-looking output.
+Agent Factory is built around guided agent skillsets that walk anyone through creating a working, valuable, self-improving AI agent. It centres on two core flows: defining the agent's goals, value, evals, architecture, and initial setup; then using evals and production evidence to diagnose behavior and drive continuous improvement.
 
 It is a CLI-first, skills-based workspace for Claude Code and Codex that supports the full lifecycle from definition and implementation to baseline validation and continuous improvement. It focuses only on the target agent harness and context; the included tests-first build loop can be replaced by another engineering process or a standard coding agent.
 
