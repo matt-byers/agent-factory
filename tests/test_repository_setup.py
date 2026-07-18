@@ -235,6 +235,11 @@ def test_readme_contains_clone_setup_repository_shape_and_lifecycle() -> None:
     assert "```mermaid" in readme
     assert "First build" in readme
     assert "Continuous improvement" in readme
+    assert "## How self-improvement works" in readme
+    assert "Simulated user ↔ target agent" in readme
+    assert "EVALFIX --> EVALRUN" in readme
+    assert 'AGAIN -->|"yes"| EVALRUN' in readme
+    assert "testagent + conversation runner" in readme
     assert "--from claude live-transcript-reviewer" in readme
     assert "behavior-review/live-transcript-reviewer" not in readme
 

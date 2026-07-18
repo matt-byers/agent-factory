@@ -13,6 +13,25 @@ It is a CLI-first, skills-based workspace for Claude Code and Codex that support
 - **Build flexibly:** Use the included tests-first loop, another engineering process, or a standard coding agent.
 - **Improve continuously:** Diagnose eval failures, exploratory `testagent` runs, and production traces before validating changes against held-in and held-out cases.
 
+## How self-improvement works
+
+Agent Factory defines the user goal before the agent implementation. Each test case combines a simulated user—with their motivation, private context, questions, disclosure behavior, and desired outcome—with separate eval criteria describing what the target agent must achieve across the conversation.
+
+```text
+User goals and scenario
+    ↓
+Test case: simulated user + private context
+    ↓
+Evals: expected outcome + trajectory + graders
+    ↓
+Simulated user ↔ target agent conversation
+    ↓
+Grade → diagnose → improve → validate
+    ↺ rerun and add the next scenario
+```
+
+Solved cases remain held-in regression coverage, while unseen variations stay sealed for held-out validation. The detailed [lifecycle diagram](#lifecycle) below shows the first build and the complete improvement loop, including formal simulated-user evals, exploratory `testagent` probes, production evidence, engineering handoffs, and repeated validation.
+
 ## Clone setup
 
 ```bash
@@ -127,22 +146,24 @@ flowchart TD
             MINI --> RECEIPT["Engineering receipt"]
             EXTERNAL --> RECEIPT
             RECEIPT --> RECONCILE["/agent-architecture-planner<br/>reconcile picture if architecture changed"]
-            RECONCILE --> BASELINE["/eval-agent<br/>baseline evaluation"]
+            RECONCILE --> BASELINE["/eval-agent<br/>simulated user ↔ target agent<br/>baseline evaluation"]
             BASELINE --> OPERATIONAL["Agent baseline<br/>prompt, toolset"]
         end
 
         subgraph I["Continuous improvement"]
             direction TB
             IMPROVESTART{"Start from"}
-            IMPROVESTART --> EVALRUN["/eval-agent<br/>run test suite with user agent"]
+            IMPROVESTART --> EVALRUN["/eval-agent<br/>run formal test cases"]
             IMPROVESTART --> PROD["/agent-production-evidence<br/>select production trace"]
-            EVALRUN --> EVIDENCE["Eval artifacts or promoted trace"]
+            EVALRUN --> CONVERSATION["Simulated user ↔ target agent<br/>conversation + trajectory"]
+            CONVERSATION --> EVIDENCE["Eval artifacts or promoted trace"]
             PROD --> EVIDENCE
-            EVIDENCE --> REVIEW["/agent-behavior-review<br/>diagnose with optional testagent probes"]
+            EVIDENCE --> REVIEW["/agent-behavior-review<br/>diagnose behavior and ownership"]
+            REVIEW -.-> PROBE["testagent + conversation runner<br/>exploratory boundary probes"]
+            PROBE -.-> REVIEW
             REVIEW --> IMPROVE["/agent-self-improvement<br/>generate learnings + bounded fixes"]
             IMPROVE -->|"eval, harness, or evidence repair"| EVALFIX["Apply eval/evidence fix"]
-            EVALFIX --> FIXRERUN["/eval-agent<br/>rerun repaired test cases with user agent"]
-            FIXRERUN --> FIXRETURN(["Return to eval artifacts<br/>and diagnosis"])
+            EVALFIX --> EVALRUN
             IMPROVE -->|"agent harness or context change"| CHANGE["Improvement handoff"]
             CHANGE --> CHANGELOOP{"Selected engineering loop"}
             CHANGELOOP --> CHANGEBUILD["/spec-plan → /agent-build-loop<br/>or external loop"]
@@ -152,8 +173,7 @@ flowchart TD
             HELDIN --> HELDOUT["/eval-agent<br/>held-out validation"]
             HELDOUT --> LEARN["/eval-compound-learnings<br/>improve the eval loop"]
             LEARN --> AGAIN{"Run test cases again?"}
-            AGAIN -->|"yes"| RERUN["/eval-agent<br/>run test suite with user agent"]
-            RERUN --> REPEAT(["Repeat from Start"])
+            AGAIN -->|"yes"| EVALRUN
             AGAIN -->|"no"| END(["End"])
         end
 
