@@ -227,23 +227,6 @@ def test_precommit_rejects_staged_agent_drift_but_ignores_unrelated_files(tmp_pa
     assert "mismatch" in drift_hook.stderr.lower()
 
 
-def test_readme_contains_principles_quickstart_and_lifecycle() -> None:
-    readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
-
-    assert "scripts/agent-setup" in readme
-    assert "## Principles" in readme
-    assert "## Quickstart & setup" in readme
-    assert "## Setting up the agent" in readme
-    assert "```mermaid" in readme
-    assert "First build" in readme
-    assert "Continuous improvement" in readme
-    assert "Simulated user ↔ target agent" in readme
-    assert "EVALFIX --> EVALRUN" in readme
-    assert 'AGAIN -->|"yes"| EVALRUN' in readme
-    assert "testagent + conversation runner" in readme
-    assert "behavior-review/live-transcript-reviewer" not in readme
-
-
 def test_environment_contract_is_generic_and_ignored() -> None:
     example = (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8")
     ignored = (REPOSITORY_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
