@@ -227,20 +227,20 @@ def test_precommit_rejects_staged_agent_drift_but_ignores_unrelated_files(tmp_pa
     assert "mismatch" in drift_hook.stderr.lower()
 
 
-def test_readme_contains_clone_setup_repository_shape_and_lifecycle() -> None:
+def test_readme_contains_principles_quickstart_and_lifecycle() -> None:
     readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "scripts/agent-setup" in readme
-    assert "```text" in readme and "agent-factory/" in readme
+    assert "## Principles" in readme
+    assert "## Quickstart & setup" in readme
+    assert "## Setting up the agent" in readme
     assert "```mermaid" in readme
     assert "First build" in readme
     assert "Continuous improvement" in readme
-    assert "## How self-improvement works" in readme
     assert "Simulated user ↔ target agent" in readme
     assert "EVALFIX --> EVALRUN" in readme
     assert 'AGAIN -->|"yes"| EVALRUN' in readme
     assert "testagent + conversation runner" in readme
-    assert "--from claude live-transcript-reviewer" in readme
     assert "behavior-review/live-transcript-reviewer" not in readme
 
 

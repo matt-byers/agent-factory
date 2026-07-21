@@ -48,6 +48,8 @@ Explain the two flows concisely:
 
 Mention that Agent Factory changes only the agent harness and context. Its included tests-first engineering loop is interchangeable with another loop or a standard coding agent.
 
+If the user wants more detail on repository components, share the overview in `repository-infrastructure.md` in this skill directory.
+
 ## Handoff
 
 End with this exact direction:
