@@ -18,6 +18,8 @@ from agent_creation.eval_design import (
     load_held_out_case,
     target_example,
     validate_suite,
+    validation_status,
+    validation_summary,
 )
 from agent_creation.lifecycle import LifecycleError, Stage, validate_stage_artifacts
 
@@ -224,6 +226,75 @@ def test_skill_and_templates_define_the_eval_design_workflow() -> None:
     assert "agent-lifecycle/agent-definition" in skill
     assert case_template.is_file()
     assert suite_template.is_file()
+
+
+def test_missing_validation_block_reads_as_pending() -> None:
+    assert validation_status(case("no-block")) == "pending"
+    assert validation_status({"validation": {"status": "bogus"}}) == "pending"
+    assert validation_status({"validation": {"status": "validated", "reviewer": "Expert"}}) == "validated"
+
+
+def test_validated_scenario_requires_a_named_reviewer() -> None:
+    suite = complete_suite()
+    suite["cases"][0]["validation"] = {"status": "validated"}
+
+    assert "validation.reviewer is required" in "; ".join(validate_suite(suite))
+
+    suite["cases"][0]["validation"] = {"status": "validated", "reviewer": "Domain expert"}
+    assert validate_suite(suite) == []
+
+
+def test_invalid_validation_status_is_rejected() -> None:
+    suite = complete_suite()
+    suite["cases"][0]["validation"] = {"status": "approved"}
+
+    assert "validation.status must be pending or validated" in "; ".join(validate_suite(suite))
+
+
+def test_validation_summary_counts_validated_and_lists_pending() -> None:
+    suite = complete_suite()
+    suite["cases"][0]["validation"] = {"status": "validated", "reviewer": "Expert"}
+
+    summary = validation_summary(suite)
+
+    assert summary["total"] == len(suite["cases"])
+    assert summary["validated"] == 1
+    assert summary["pending"] == len(suite["cases"]) - 1
+    assert "smoke-positive" not in summary["pending_ids"]
+    assert "core-capability" in summary["pending_ids"]
+
+
+def test_held_out_manifest_exposes_validation_without_unsealing(tmp_path: Path) -> None:
+    suite = complete_suite()
+    held = next(item for item in suite["cases"] if item["split"] == "held_out")
+    held["validation"] = {"status": "validated", "reviewer": "Expert"}
+
+    paths = create_suite_artifacts(suite, tmp_path)
+    public_suite = json.loads(paths["suite"].read_text(encoding="utf-8"))
+    manifest = next(item for item in public_suite["cases"] if item["split"] == "held_out")
+
+    assert manifest["validation"] == {"status": "validated"}
+    assert "reviewer" not in manifest["validation"]
+    assert "simulated_user" not in manifest
+
+
+def test_cli_reports_and_clusters(tmp_path: Path) -> None:
+    paths = create_suite_artifacts(complete_suite(), tmp_path)
+    script = str(REPOSITORY_ROOT / "scripts/agent-eval-designer")
+
+    report = subprocess.run(
+        [script, "report", "--suite", str(paths["suite"])],
+        cwd=REPOSITORY_ROOT, text=True, capture_output=True, check=False,
+    )
+    cluster = subprocess.run(
+        [script, "cluster", "--suite", str(paths["suite"])],
+        cwd=REPOSITORY_ROOT, text=True, capture_output=True, check=False,
+    )
+
+    assert report.returncode == 0
+    assert json.loads(report.stdout)["validation"]["pending"] == len(complete_suite()["cases"])
+    assert cluster.returncode == 0
+    assert isinstance(json.loads(cluster.stdout)["clusters"], list)
 
 
 def test_lifecycle_rejects_pending_eval_suite() -> None:

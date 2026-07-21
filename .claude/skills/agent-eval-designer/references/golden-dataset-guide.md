@@ -83,6 +83,45 @@ reach the same pass/fail verdict. If they would not, tighten the spec.
 - 20-50 tasks drawn from real failures is a strong start — early on each change
   has a large effect size, so small samples suffice.
 
+### Cluster intents deterministically
+
+Use the built-in tool, not an ad-hoc model call, so the same corpus always
+yields the same clusters and coverage is reproducible:
+
+```bash
+scripts/agent-eval-designer cluster --input <items.json>   # list of strings or {id, text}
+scripts/agent-eval-designer cluster --suite <suite.json>   # cluster an existing suite's openings
+```
+
+It groups items by salient-token overlap (union-find over a Jaccard threshold,
+`--threshold` to tune) and labels each cluster by its most common terms. Read the
+clusters to write one representative case per intent and to catch a single intent
+crowding out the rest. Feed it transcript openings or ticket subjects to map a
+corpus; feed it your own suite's openings to audit the coverage you already have.
+
+## A golden scenario is expert-validated, or it is pending
+
+"Golden" is a property of the label, not the pass state: a case counts as a
+golden scenario only once a human expert has confirmed its expected result is
+actually correct. Track that explicitly on each case:
+
+```json
+"validation": {"status": "validated", "reviewer": "Domain expert", "reviewed_on": "2026-07-21"}
+```
+
+- New cases default to `{"status": "pending"}`. A missing or malformed block also
+  reads as pending, so a case is never treated as validated by accident.
+- Moving to `validated` requires naming the `reviewer` who confirmed it. Add
+  `reviewed_on` to date the sign-off.
+- `scripts/agent-eval-designer report` summarizes validated-versus-pending counts
+  and lists every pending case id, so a reviewer knows exactly what still needs
+  confirming. The held-out public manifest also carries each case's status, so
+  governance stays visible without unsealing the payload.
+
+Pending cases are still useful — capability targets and freshly drafted edge
+cases start pending and earn validation as an expert reads them. The status just
+keeps unverified expectations from being mistaken for confirmed ground truth.
+
 ## Capability, regression, and reliability
 
 - **Capability** cases start at a low pass rate — a hill to climb. **Regression**

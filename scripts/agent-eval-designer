@@ -10,7 +10,28 @@ import sys
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
-from agent_creation.eval_design import EvalDesignError, create_suite_artifacts, read_suite, validate_suite
+from agent_creation.eval_design import (
+    EvalDesignError,
+    create_suite_artifacts,
+    read_suite,
+    validate_suite,
+    validation_summary,
+)
+from agent_creation.intent_clustering import ClusteringError, cluster_intents
+
+
+def suite_openings(suite: dict) -> list[dict[str, str]]:
+    cases = suite.get("cases") if isinstance(suite, dict) else None
+    if not isinstance(cases, list):
+        return []
+    openings: list[dict[str, str]] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        message = (case.get("input") or {}).get("initial_user_message")
+        if isinstance(case.get("id"), str) and isinstance(message, str):
+            openings.append({"id": case["id"], "text": message})
+    return openings
 
 
 def main() -> int:
@@ -21,19 +42,36 @@ def main() -> int:
     render.add_argument("--input", required=True)
     validate = commands.add_parser("validate")
     validate.add_argument("--suite")
+    report = commands.add_parser("report")
+    report.add_argument("--suite")
+    cluster = commands.add_parser("cluster")
+    source = cluster.add_mutually_exclusive_group(required=True)
+    source.add_argument("--input", help="JSON list of strings or {id, text} objects to cluster")
+    source.add_argument("--suite", help="Cluster the openings of an existing suite instead")
+    cluster.add_argument("--threshold", type=float, default=0.3)
     arguments = parser.parse_args()
     root = Path(arguments.root).resolve()
     try:
         if arguments.command == "render":
             paths = create_suite_artifacts(read_suite(Path(arguments.input)), root)
             result = {"status": "complete", "artifacts": {key: str(value) for key, value in paths.items()}}
+        elif arguments.command == "report":
+            path = Path(arguments.suite) if arguments.suite else root / "agent-lifecycle/evals/suite.yaml"
+            result = {"status": "complete", "validation": validation_summary(read_suite(path))}
+        elif arguments.command == "cluster":
+            if arguments.input:
+                items = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            else:
+                path = Path(arguments.suite) if arguments.suite else root / "agent-lifecycle/evals/suite.yaml"
+                items = suite_openings(read_suite(path))
+            result = {"status": "complete", "clusters": cluster_intents(items, threshold=arguments.threshold)}
         else:
             path = Path(arguments.suite) if arguments.suite else root / "agent-lifecycle/evals/suite.yaml"
             errors = validate_suite(read_suite(path))
             result = {"status": "valid" if not errors else "invalid", "errors": errors}
             print(json.dumps(result, sort_keys=True))
             return 0 if not errors else 1
-    except EvalDesignError as error:
+    except (EvalDesignError, ClusteringError) as error:
         result = {"status": "invalid", "errors": error.issues}
         print(json.dumps(result, sort_keys=True))
         return 1

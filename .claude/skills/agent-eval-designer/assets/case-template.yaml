@@ -20,5 +20,6 @@
   "graders": {
     "deterministic": [{"id": "required-check", "check": "replace_with_end_state_or_invariant_check", "arguments": {}}],
     "rubrics": [{"id": "quality", "criterion": "Replace with one narrow criterion (e.g. resolution grounded in tool results).", "evidence": "final_output", "threshold": 0.8}]
-  }
+  },
+  "validation": {"status": "pending"}
 }
