@@ -4,15 +4,6 @@ Agent Factory is built around guided agent skillsets that walk anyone through cr
 
 It is a CLI-first, skills-based workspace for Claude Code and Codex that supports the full lifecycle from definition and implementation to baseline validation and continuous improvement. It focuses only on the target agent harness and context; the included tests-first build loop can be replaced by another engineering process or a standard coding agent.
 
-## What it enables
-
-- **Start quickly:** Turn an agent idea into a structured development lifecycle without first building an eval framework.
-- **Measure value:** Connect agent behavior to user outcomes and unit economics such as time, revenue, cost, gross profit, or avoided loss.
-- **Design evals:** Define test cases, rubrics, simulated users, and held-out scenarios before implementation.
-- **Plan architecture:** Select an appropriate model call, workflow, agent, or multi-agent design using maintained best practices.
-- **Build flexibly:** Use the included tests-first loop, another engineering process, or a standard coding agent.
-- **Improve continuously:** Diagnose eval failures, exploratory `testagent` runs, and production traces before validating changes against held-in and held-out cases.
-
 ## How self-improvement works
 
 Agent Factory defines the user goal before the agent implementation. Each test case combines a simulated user—with their motivation, private context, questions, disclosure behavior, and desired outcome—with separate eval criteria describing what the target agent must achieve across the conversation.
@@ -32,15 +23,16 @@ Grade → diagnose → improve → validate
 
 Solved cases remain held-in regression coverage, while unseen variations stay sealed for held-out validation. The detailed [lifecycle diagram](#lifecycle) below shows the first build and the complete improvement loop, including formal simulated-user evals, exploratory `testagent` probes, production evidence, engineering handoffs, and repeated validation.
 
-## Clone setup
+## Quickstart & setup
 
 ```bash
 git clone <repository-url> agent-factory
 cd agent-factory
 direnv allow
+claude --dangerously-skip-permissions "/onboard"
 ```
 
-Then open Claude Code or Codex. Invoke `/onboard` to run `scripts/agent-setup`, configure model-provider and optional Langfuse credentials one at a time, learn the two Agent Factory flows, and hand off to the first-build lifecycle. Credentials are entered through a hidden local terminal prompt and never pasted into chat.
+The final command starts a Claude Code session and invokes `/onboard`, which runs `scripts/agent-setup`, configures model-provider and optional Langfuse credentials one at a time, explains the two Agent Factory flows, and hands off to the first-build lifecycle. Codex users can open Codex and invoke `/onboard` instead. Credentials are entered through a hidden local terminal prompt and never pasted into chat.
 
 `direnv allow` adds the repository `bin/` directory to the local command path, including the exact `testagent` command. Repository setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the pre-commit gate, and validates Claude/Codex adapters.
 
@@ -74,59 +66,6 @@ The model-provider variables—`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GOOGL
 | Git pre-commit hook | Rejects staged drift between Claude and Codex skill/agent adapters. It does not replace the test suite. |
 
 The repository uses the Python standard library for its core lifecycle and artifact logic. The complete third-party runtime dependency list is intentionally small and lives in `requirements.txt`: `langsmith`, `agentevals`, `openevals`, `langfuse`, and `pytest`.
-
-## Repository shape
-
-```text
-agent-factory/
-├── README.md
-├── CLAUDE.md
-├── AGENTS.md -> CLAUDE.md
-├── .env.example
-├── requirements.txt
-├── bin/
-├── .claude/
-│   ├── skills/
-│   │   ├── onboard/
-│   │   ├── agent-lifecycle-orchestrator/
-│   │   ├── agent-goal-interview/
-│   │   ├── agent-eval-designer/
-│   │   ├── agent-architecture-planner/
-│   │   ├── spec-plan/
-│   │   ├── agent-build-loop/
-│   │   ├── human-verify/
-│   │   ├── eval-agent/
-│   │   ├── agent-behavior-review/
-│   │   ├── agent-production-evidence/
-│   │   ├── agent-self-improvement/
-│   │   └── eval-compound-learnings/
-│   └── agents/
-│       ├── testagent-conversation-runner.md
-│       ├── live-transcript-reviewer.md
-│       ├── finding-fragment-writer.md
-│       └── final-spec-compiler.md
-├── .agents/skills -> ../.claude/skills
-├── .codex/agents/
-│   ├── testagent-conversation-runner.toml
-│   ├── live-transcript-reviewer.toml
-│   ├── finding-fragment-writer.toml
-│   └── final-spec-compiler.toml
-├── .githooks/pre-commit
-├── docs/references/
-├── scripts/
-├── src/agent_creation/
-├── tests/
-└── agent-lifecycle/
-    ├── setup.yaml
-    ├── state.yaml
-    ├── agent-definition/
-    ├── architecture/
-    ├── evals/
-    ├── evidence/
-    ├── handoffs/
-    ├── receipts/
-    └── attempts/
-```
 
 ## Lifecycle
 
@@ -181,12 +120,3 @@ flowchart TD
     end
 ```
 
-## Harness checks
-
-```bash
-scripts/agent-config/sync_agent.py --from claude live-transcript-reviewer
-scripts/agent-config/verify_agent_config.py
-scripts/test-agent-config.sh
-```
-
-The staged pre-commit gate runs only when harness files are staged and rejects broken links, malformed skills, missing role pairs, or stale role renderings.
