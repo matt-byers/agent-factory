@@ -5,6 +5,7 @@ Agent Factory is a guided agent skillset that walks anyone through creating a wo
 1. **Best-practice packages over custom infrastructure.** Agent building and evaluation lean on established packages — the LangSmith local runner, AgentEvals, OpenEvals, and Langfuse — rather than rolling custom implementations. See [Packages and evaluation infrastructure](#packages-and-evaluation-infrastructure) for details.
 2. **Coding-harness agnostic.** The repository is designed to be cloned and is immediately compatible with both Claude Code and Codex. Skill and project-agent updates are kept in alignment across both harnesses through automated sync scripts and a staged pre-commit gate.
 3. **Evals-led iteration.** Every agent is rooted in a clear user goal, and every improvement is tied to verifiable target outcomes or reproducible failure cases.
+4. **Grounded in current best practices.** Architecture choices and improvement recommendations cite a maintained [agent-building best-practices reference](docs/references/agent-building-best-practices.md) — covering architecture selection, tool design, context management, evaluation, and failure recovery — kept up to date with the latest in agent building so changes reflect current practice rather than ad-hoc judgment.
 
 ## Quickstart & setup
 
