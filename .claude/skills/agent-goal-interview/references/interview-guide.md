@@ -8,6 +8,24 @@
 - What belongs in scope, what is excluded, and which agent harness or context surfaces may change?
 - What can fail, and what is the failure cost of each important failure?
 
+## Gather real-world material for evaluation
+
+The downstream eval designer builds a golden dataset of task specifications from
+real failures, not imagined ones. Surface that raw material now:
+
+- Are there existing transcripts, tickets, or logs? What recurring intents or
+  request types appear, and which ones go wrong most often?
+- Where should the agent refuse, escalate to a human, or decline rather than
+  act? Capture these should-not situations alongside the should-do ones so the
+  suite can test both sides.
+- How do real users actually behave — vague, impatient, changing their mind,
+  withholding detail? Name the difficult behaviors to encode, not just the
+  cooperative path.
+- What policy or compliance constraints govern the flow, so adherence can be
+  scored separately from whether the task got done?
+- How reliable must the behavior be — acceptable occasionally, or correct every
+  time? Record where users expect every-time reliability.
+
 ## Establish trade-offs
 
 Ask the user to rank accuracy, latency, and cost from first to third and explain each rank. Resolve contradictory rankings or constraints explicitly.
