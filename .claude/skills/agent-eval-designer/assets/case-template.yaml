@@ -2,23 +2,24 @@
   "id": "replace-with-case-id",
   "split": "held_in",
   "tags": ["capability", "positive", "representative"],
-  "trials": 1,
-  "seeds": [1],
-  "input": {"initial_user_message": "Replace with the public opening."},
+  "trials": 2,
+  "seeds": [1, 2],
+  "input": {"initial_user_message": "Replace with the public opening (what the user says first, no private facts)."},
   "simulated_user": {
-    "persona": "Replace with a concise persona.",
+    "persona": "Replace with a concrete persona that includes a difficult trait drawn from real interactions (vague, impatient, changes mind, over-shares, or withholds), not a compliant helper.",
     "private_truth": [
-      {"id": "private-fact", "value": "Replace with private truth.", "reveal_on": ["trigger phrase"]}
+      {"id": "private-fact", "value": "Replace with a fact the user holds but does not volunteer.", "reveal_on": ["narrow trigger phrase the agent must ask for"]}
     ],
     "disclosure_policy": {"mode": "progressive", "max_facts_per_turn": 1, "fallback": "next_unrevealed"},
-    "termination": {"success_condition": "Replace with an observable stopping condition.", "max_turns": 6, "stall_turns": 2}
+    "termination": {"success_condition": "Replace with an observable end state (task done, or correctly refused/escalated).", "max_turns": 6, "stall_turns": 2}
   },
   "expected": {
-    "outcome": "Replace with the expected outcome.",
+    "outcome": "Replace with the expected end state, not the wording. Grade the effect, and score policy adherence separately from task success.",
     "trajectory": {"required_tools": [], "forbidden_tools": [], "ordered_tools": []}
   },
   "graders": {
-    "deterministic": [{"id": "required-check", "check": "replace_with_check", "arguments": {}}],
-    "rubrics": [{"id": "quality", "criterion": "Replace with one narrow criterion.", "evidence": "final_output", "threshold": 0.8}]
-  }
+    "deterministic": [{"id": "required-check", "check": "replace_with_end_state_or_invariant_check", "arguments": {}}],
+    "rubrics": [{"id": "quality", "criterion": "Replace with one narrow criterion (e.g. resolution grounded in tool results).", "evidence": "final_output", "threshold": 0.8}]
+  },
+  "validation": {"status": "pending"}
 }

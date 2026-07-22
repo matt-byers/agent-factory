@@ -22,6 +22,7 @@ REQUIRED_COVERAGE = {
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9-]*$")
 METRIC_KINDS = {"deterministic", "qualitative", "operational"}
 AGGREGATIONS = {"pass_rate", "mean", "max", "min", "p50", "p95"}
+VALIDATION_STATUSES = {"pending", "validated"}
 
 
 class EvalDesignError(ValueError):
@@ -119,6 +120,45 @@ def validate_expected(value: Any, label: str) -> list[str]:
     return issues
 
 
+def validation_status(case: Any) -> str:
+    """Return a case's expert-validation status, defaulting to pending.
+
+    A missing or malformed block reads as ``pending`` so a case can never be
+    treated as an expert-validated golden scenario by accident.
+    """
+
+    if not isinstance(case, dict):
+        return "pending"
+    block = case.get("validation")
+    if not isinstance(block, dict):
+        return "pending"
+    status = block.get("status")
+    return status if status in VALIDATION_STATUSES else "pending"
+
+
+def validate_validation(value: Any, label: str) -> list[str]:
+    """Validate the optional expert-validation block when present.
+
+    The block is optional; its absence means the scenario is pending human
+    expert sign-off. When present it must be well formed, and a ``validated``
+    scenario must name the reviewer who confirmed it.
+    """
+
+    if value is None:
+        return []
+    if not isinstance(value, dict):
+        return [f"{label}.validation must be an object"]
+    issues: list[str] = []
+    status = value.get("status")
+    if status not in VALIDATION_STATUSES:
+        issues.append(f"{label}.validation.status must be pending or validated")
+    if status == "validated" and not non_empty(value.get("reviewer")):
+        issues.append(f"{label}.validation.reviewer is required for a validated scenario")
+    if "reviewed_on" in value and not non_empty(value.get("reviewed_on")):
+        issues.append(f"{label}.validation.reviewed_on must be a non-empty date string")
+    return issues
+
+
 def validate_graders(value: Any, label: str) -> list[str]:
     if not isinstance(value, dict):
         return [f"{label}.graders is required"]
@@ -189,6 +229,7 @@ def validate_case(value: Any, index: int) -> list[str]:
     issues.extend(validate_simulated_user(value.get("simulated_user"), label))
     issues.extend(validate_expected(value.get("expected"), label))
     issues.extend(validate_graders(value.get("graders"), label))
+    issues.extend(validate_validation(value.get("validation"), label))
     return issues
 
 
@@ -289,6 +330,7 @@ def create_suite_artifacts(suite: dict[str, Any], root: Path) -> dict[str, Path]
                 "id": item["id"],
                 "split": item["split"],
                 "tags": item["tags"],
+                "validation": {"status": validation_status(item)},
                 "sealed_ref": str(sealed_path.relative_to(root)),
                 "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
             }
@@ -333,6 +375,35 @@ def target_example(case: dict[str, Any]) -> dict[str, Any]:
             "trials": case["trials"],
             "seeds": list(case["seeds"]),
         },
+    }
+
+
+def validation_summary(suite: Any) -> dict[str, Any]:
+    """Summarize expert-validation coverage across a suite's cases.
+
+    Reports how many golden scenarios a human expert has confirmed versus how
+    many remain pending sign-off, and lists the pending case ids so a reviewer
+    knows exactly what still needs confirming.
+    """
+
+    cases = suite.get("cases") if isinstance(suite, dict) else None
+    if not isinstance(cases, list):
+        return {"total": 0, "validated": 0, "pending": 0, "pending_ids": []}
+    pending_ids = [
+        case["id"]
+        for case in cases
+        if isinstance(case, dict)
+        and isinstance(case.get("id"), str)
+        and validation_status(case) != "validated"
+    ]
+    validated = sum(
+        1 for case in cases if isinstance(case, dict) and validation_status(case) == "validated"
+    )
+    return {
+        "total": len(cases),
+        "validated": validated,
+        "pending": len(cases) - validated,
+        "pending_ids": pending_ids,
     }
 
 
