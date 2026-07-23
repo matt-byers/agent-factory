@@ -1,50 +1,140 @@
-Agent Factory is a guided agent skillset that walks anyone through creating a working, valuable, self-improving AI agent. It centres on two core flows: defining the agent's goals, value, evals, architecture, and initial setup; then using evals and production traces drive continuous improvement.
+# Agent Factory
 
-## Principles
+Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It provides a disciplined path from product problem to an agent harness with measurable behavior—not a generic prompt template or an agent framework.
 
-1. **Best-practice packages over custom infrastructure.** Agent building and evaluation lean on established packages — the LangSmith local runner, AgentEvals, OpenEvals, and Langfuse — rather than rolling custom implementations. See [Packages and evaluation infrastructure](#packages-and-evaluation-infrastructure) for details.
-2. **Coding-harness agnostic.** The repository is designed to be cloned and is immediately compatible with both Claude Code and Codex. Skill and project-agent updates are kept in alignment across both harnesses through automated sync scripts and a staged pre-commit gate.
-3. **Evals-led iteration.** Every agent is rooted in a clear user goal, and every improvement is tied to verifiable target outcomes or reproducible failure cases.
-4. **Agent improvements grounded in best practice.** Architecture choices and improvement recommendations cite a maintained [agent-building best-practices reference](docs/references/agent-building-best-practices.md) — covering architecture selection, tool design, context management, evaluation, and failure recovery — kept up to date with the latest in agent building so changes reflect current practice rather than ad-hoc judgment.
+The central idea is simple: treat an agent as a product with an executable specification. Define the user outcome, express representative interactions as eval cases, implement the smallest architecture that can satisfy them, and use failures as evidence for the next change.
 
-## Quickstart & setup
+## Quickstart
+
+Clone the repository and open it in Claude Code or Codex:
 
 ```bash
 git clone <repository-url> agent-factory
 cd agent-factory
-direnv allow
-claude --dangerously-skip-permissions "/onboard"
 ```
 
-The final command starts a Claude Code session and invokes `/onboard`, which runs `scripts/agent-setup`, configures model-provider and optional Langfuse credentials one at a time, explains the two Agent Factory flows, and hands off to the first-build lifecycle. Codex users can open Codex and invoke `/onboard` instead. Credentials are entered through a hidden local terminal prompt and never pasted into chat.
-
-`direnv allow` adds the repository `bin/` directory to the local command path, including the exact `testagent` command. Repository setup creates `.venv`, installs `requirements.txt`, copies `.env.example` to `.env` only when `.env` is absent, installs the pre-commit gate, and validates Claude/Codex adapters.
-
-Eval result destinations and their optional credential setup are documented in [docs/references/eval-result-providers.md](docs/references/eval-result-providers.md).
-
-## Setting up the agent
-
-Agent Factory works in two phases:
-
-1. **Initial goal setting:** capture the agent's context, goals, business case, and success criteria; design evals and a simulated user; plan the architecture; then implement to a measured baseline.
-2. **Evals-led iteration:** run evals or promote production evidence, diagnose failures, apply evidence-linked improvements or eval repairs, and validate changes against held-in and held-out cases.
-
-Agent Factory defines the user goal before the agent implementation. Each test case combines a simulated user—with their motivation, private context, questions, disclosure behavior, and desired outcome—with separate eval criteria describing what the target agent must achieve across the conversation.
+Start the guided setup and lifecycle:
 
 ```text
-User goals and scenario
-    ↓
-Test case: simulated user + private context
-    ↓
-Evals: expected outcome + trajectory + graders
-    ↓
-Simulated user ↔ target agent conversation
-    ↓
-Grade → diagnose → improve → validate
-    ↺ rerun and add the next scenario
+/onboard
 ```
 
-Solved cases remain held-in regression coverage, while unseen variations stay sealed for held-out validation. The diagram below shows the first build and the complete improvement loop, including formal simulated-user evals, exploratory `testagent` probes, production evidence, engineering handoffs, and repeated validation.
+`/onboard` prepares the local environment, configures the providers you need, explains the first-build and improvement flows, and hands off to the lifecycle orchestrator. The repository then routes the work through the relevant skills; you do not need to choose the whole process up front.
+
+## The mental model
+
+An LLM solution is a system, not a model call. Its behavior comes from the interaction of the product objective, instructions and context, model, tools, control flow, and the user conversation. A change to any one of these can help one case while breaking another. Evals make those trade-offs visible.
+
+Agent Factory organizes the work into five layers:
+
+1. **Product specification** — identify the user, their job to be done, the agent's boundaries, the value of success, and unacceptable outcomes.
+2. **Evaluation design** — turn the specification into realistic conversations and observable criteria. This is the executable product spec.
+3. **Agent architecture** — select the context, tools, model roles, state, and control flow required to meet the evals. Prefer the simplest architecture that explains the requirements.
+4. **Implementation and baseline** — build the harness, run the suite, and establish what the first version actually does.
+5. **Evidence-led iteration** — turn eval failures and selected production traces into diagnoses, bounded changes, regression cases, and held-out validation.
+
+```text
+Product goal
+    ↓
+Representative eval cases
+    ↓
+Agent harness: prompt + context + tools + control flow
+    ↓
+Measured baseline
+    ↓
+Failures and production evidence
+    ↓
+Diagnosis → repair → held-in and held-out validation
+    ↺
+```
+
+The repository is opinionated about sequence: do not optimize prompts before you can state the user outcome and evaluate it; do not accept a repair until it survives a test beyond the case that motivated it.
+
+## Building a first agent
+
+Start at `/onboard`. The first-build flow takes you through:
+
+1. `/agent-goal-interview` — creates a brief with the target users, product problem, business value, scope, risks, and success metrics.
+2. `/agent-eval-designer` — designs the eval suite, including simulated users, deterministic checks where possible, qualitative rubrics where necessary, and held-out coverage.
+3. `/agent-architecture-planner` — produces an architecture picture and an implementation handoff derived from the goal and evals.
+4. `/spec-plan` and `/agent-build-loop`, or your preferred engineering loop — implements the agreed handoff.
+5. `/eval-agent` — runs a baseline evaluation against the completed target agent.
+
+The output is not merely a working demo. It is a target agent plus an artifact trail explaining what it is meant to do, how it is tested, and which baseline results it achieved.
+
+## Designing test cases and running evals
+
+An eval case represents a user interaction rather than an isolated prompt/response. It combines:
+
+- A **simulated user**: motivation, private context, questions, disclosure behavior, and desired outcome.
+- A **scenario**: the conditions and conversation the agent must navigate.
+- **Evaluators**: outcome checks, trajectory expectations such as tool use, and/or narrow qualitative rubrics.
+
+The simulated user and target agent converse. The evaluation run captures the conversation and grades the resulting behavior. Use deterministic checks for facts, schemas, tool calls, and other stable properties. Use model-based judges only for behavior that genuinely requires qualitative judgment, with a constrained rubric.
+
+Cases that expose a known defect become **held-in** regression coverage. Similar cases are kept **held-out** so a fix has to generalize rather than overfit the example. This distinction is what turns a collection of demos into an evaluation suite.
+
+## Improving an existing agent
+
+When an agent has a failing eval, suspicious behavior, or a useful production trace, run:
+
+```text
+/agent-lifecycle-orchestrator
+```
+
+The improvement flow can start from formal eval artifacts or selected production evidence. It diagnoses failure ownership—agent behavior, harness/context, tool integration, or the evaluation itself—then routes either a direct evidence repair or an engineering handoff. Agent changes are validated against held-in and held-out cases before the learning is folded back into the suite.
+
+## Core concepts
+
+| Term | Meaning |
+|---|---|
+| **Target agent** | The LLM-based system being built or improved, including its prompt, context, tools, state, and control flow. |
+| **Agent harness** | The code and configuration that invokes the model, assembles context, exposes tools, manages state, and returns behavior to the user. |
+| **Eval** | A repeatable experiment that measures whether the target agent satisfies a defined behavior or user outcome. |
+| **Simulated user** | A model-driven user with a goal and private context, used to produce realistic multi-turn interactions. |
+| **Trajectory** | The sequence of messages, tool calls, state changes, and outcomes produced during an agent interaction. |
+| **Held-in case** | A known scenario used for development and regression prevention. |
+| **Held-out case** | An unseen scenario reserved to test whether a change generalizes. |
+| **Production evidence** | A selected and locally redacted trace used as evidence for diagnosis and improvement. |
+| **Baseline** | The measured behavior of a particular agent version before an improvement attempt. |
+
+## What happens during setup
+
+Onboarding creates a local Python environment, installs the repository dependencies, creates `.env` from `.env.example` when needed, installs the repository's commit check, and verifies the Claude Code and Codex adapters.
+
+Model-provider keys are optional individually: configure only the providers you choose for simulation and judging. Langfuse is optional and is used when you want remote traces, datasets, experiments, or production evidence. See [evaluation result providers](docs/references/eval-result-providers.md) for the exact options.
+
+## Evaluation infrastructure
+
+Local execution and remote observability are intentionally separate:
+
+| Component | Why it is here | Do you need an account? |
+|---|---|---|
+| LangSmith Python package | Runs local evaluations without uploading results to LangSmith. | No |
+| AgentEvals | Scores agent behavior, including expected tool-use sequences. | Only a selected judge model when needed |
+| OpenEvals | Provides model-based judges and multi-turn simulated-user conversations. | Only a selected simulator or judge model |
+| Langfuse | Optionally stores remote traces, datasets, experiments, and production evidence. | Yes, if you use it |
+| pytest | Tests the repository's lifecycle, artifacts, adapters, and evaluation gates. | No |
+
+LangChain and LangGraph may be recommended when they fit the target agent. They are not requirements for the agent you build.
+
+## Useful references
+
+- [Core concepts glossary](docs/references/core-concepts-glossary.md) — a fuller explanation of the terms used by the workflow.
+- [Agent-building best practices](docs/references/agent-building-best-practices.md) — the maintained engineering guidance behind architecture and improvement recommendations.
+- [Evaluation result providers](docs/references/eval-result-providers.md) — credentials and destinations for evaluation results.
+
+## For people maintaining this repository
+
+The repository works in both Claude Code and Codex. The manuals, skills, and project-agent configuration have shared sources of truth; see [`CLAUDE.md`](CLAUDE.md) before changing them. After changing those shared pieces, run:
+
+```bash
+scripts/test-agent-config.sh
+```
+
+## Full lifecycle map
+
+Use this diagram when you want to see every stage and handoff. You do not need to memorize it: `/onboard` and `/agent-lifecycle-orchestrator` guide you to the relevant next step.
 
 ```mermaid
 flowchart TD
@@ -96,19 +186,3 @@ flowchart TD
         OPERATIONAL ~~~ IMPROVESTART
     end
 ```
-
-## Packages and evaluation infrastructure
-
-Agent Factory keeps local execution separate from remote observability:
-
-| Component | What it does | Account or credentials |
-|---|---|---|
-| LangSmith Python package | Runs local offline evals through `evaluate`/`aevaluate` with `upload_results=False`. It is an internal runner dependency, not a hosted destination. | None |
-| AgentEvals | Scores agent trajectories, including expected tool-use sequences. | Uses the selected judge model when required |
-| OpenEvals | Supplies LLM-as-judge evaluators and multi-turn simulated-user execution. | Uses the selected simulator or judge model |
-| Langfuse | Stores remote traces, datasets, experiments, scores, source links, and production evidence used by the improvement loop. | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` |
-| pytest | Tests lifecycle state, artifact integrity, provider adapters, eval gates, skills, and the engineering loop. | None |
-
-LangChain and LangGraph are referenced by the architecture-planning guidance and may be recommended for a target agent when appropriate. Agent Factory does not require the target agent to use either framework. They may also appear in the virtual environment as dependencies of the evaluation packages.
-
-The model-provider variables—`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GOOGLE_API_KEY`—are optional individually. Configure only the providers selected for the simulator and judge roles. LangSmith environment variables are intentionally unsupported because Agent Factory never uploads to LangSmith.
