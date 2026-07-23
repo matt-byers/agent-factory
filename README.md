@@ -1,8 +1,8 @@
 # Agent Factory
 
-Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It provides a disciplined path from product problem to an agent harness with measurable behavior—not a generic prompt template or an agent framework.
+Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It's not a prompt template or an agent framework. It's a disciplined path from product problem to an agent harness with measurable behavior.
 
-The central idea is simple: treat an agent as a product with an executable specification. Define the user outcome, express representative interactions as eval cases, implement the smallest architecture that can satisfy them, and use failures as evidence for the next change.
+Treat an agent as a product with an executable specification. Define the user outcome. Express representative interactions as eval cases. Build the smallest architecture that satisfies them. Use failures as evidence for the next change.
 
 ## Quickstart
 
@@ -19,11 +19,11 @@ Start the guided setup and lifecycle:
 /onboard
 ```
 
-`/onboard` prepares the local environment, configures the providers you need, explains the first-build and improvement flows, and hands off to the lifecycle orchestrator. The repository then routes the work through the relevant skills; you do not need to choose the whole process up front.
+`/onboard` prepares the local environment, configures the providers you need, and explains the first-build and improvement flows. It then hands off to the lifecycle orchestrator, which routes you through the relevant skills. You don't need to plan the whole process up front.
 
 ## The mental model
 
-An LLM solution is a system, not a model call. Its behavior comes from the interaction of the product objective, instructions and context, model, tools, control flow, and the user conversation. A change to any one of these can help one case while breaking another. Evals make those trade-offs visible.
+An LLM solution is a system, not a model call. Its behavior comes from the product objective, instructions and context, model, tools, control flow, and the user conversation working together. Changing any one of these can help one case while breaking another. Evals make those trade-offs visible.
 
 Agent Factory organizes the work into five layers:
 
@@ -48,7 +48,18 @@ Diagnosis → repair → held-in and held-out validation
     ↺
 ```
 
-The repository is opinionated about sequence: do not optimize prompts before you can state the user outcome and evaluate it; do not accept a repair until it survives a test beyond the case that motivated it.
+The repository is opinionated about sequence. Don't optimize prompts before you can state the user outcome and evaluate it. Don't accept a repair until it survives a test beyond the case that motivated it.
+
+## Choosing a solution shape
+
+`/agent-architecture-planner` picks the least autonomous shape that can reliably satisfy your evals, then adds complexity only where evidence shows a simpler shape falls short. There are four shapes to choose from:
+
+- **Model call** — one bounded inference, no tools, no adaptive control flow. Fits a single-use, contained problem, like a one-off extraction of structured data from unstructured text.
+- **Workflow** — steps, branches, and stopping conditions are known in advance, with deterministic routing kept in code. Fits a repeatable, predictable process over unstructured data, or one where a stage needs basic model judgment but the overall path never changes.
+- **Agent** — the outcome is clear but the path to it isn't. Fits one coherent domain where general capabilities are available and the agent needs to reason about which tool to use, in what order, and how to recover from failure.
+- **Multi-agent system** — the problem spans distinct areas of concern that a single agent can't hold at once. Fits larger-scope work where an orchestrator delegates to subagents, each an expert in its own domain, and combines their results.
+
+Each escalation must earn its complexity: it should measurably beat the simpler shape on the same held-in and held-out cases, not just seem more capable in theory.
 
 ## Building a first agent
 
@@ -60,29 +71,29 @@ Start at `/onboard`. The first-build flow takes you through:
 4. `/spec-plan` and `/agent-build-loop`, or your preferred engineering loop — implements the agreed handoff.
 5. `/eval-agent` — runs a baseline evaluation against the completed target agent.
 
-The output is not merely a working demo. It is a target agent plus an artifact trail explaining what it is meant to do, how it is tested, and which baseline results it achieved.
+The output is more than a working demo. You get a target agent plus an artifact trail explaining what it's meant to do, how it's tested, and which baseline results it achieved.
 
 ## Designing test cases and running evals
 
-An eval case represents a user interaction rather than an isolated prompt/response. It combines:
+An eval case represents a user interaction, not an isolated prompt/response. It combines:
 
 - A **simulated user**: motivation, private context, questions, disclosure behavior, and desired outcome.
 - A **scenario**: the conditions and conversation the agent must navigate.
-- **Evaluators**: outcome checks, trajectory expectations such as tool use, and/or narrow qualitative rubrics.
+- **Evaluators**: outcome checks, trajectory expectations such as tool use, and narrow qualitative rubrics.
 
-The simulated user and target agent converse. The evaluation run captures the conversation and grades the resulting behavior. Use deterministic checks for facts, schemas, tool calls, and other stable properties. Use model-based judges only for behavior that genuinely requires qualitative judgment, with a constrained rubric.
+The simulated user and target agent converse. The evaluation run captures the conversation and grades the resulting behavior. Use deterministic checks for facts, schemas, tool calls, and other stable properties. Save model-based judges for behavior that genuinely needs qualitative judgment, and keep the rubric narrow.
 
-Cases that expose a known defect become **held-in** regression coverage. Similar cases are kept **held-out** so a fix has to generalize rather than overfit the example. This distinction is what turns a collection of demos into an evaluation suite.
+Cases that expose a known defect become **held-in** regression coverage. Similar cases stay **held-out** so a fix has to generalize instead of overfitting to the example. This distinction is what turns a pile of demos into an evaluation suite.
 
 ## Improving an existing agent
 
-When an agent has a failing eval, suspicious behavior, or a useful production trace, run:
+Run this when an agent has a failing eval, shows suspicious behavior, or produces a useful production trace:
 
 ```text
 /agent-lifecycle-orchestrator
 ```
 
-The improvement flow can start from formal eval artifacts or selected production evidence. It diagnoses failure ownership—agent behavior, harness/context, tool integration, or the evaluation itself—then routes either a direct evidence repair or an engineering handoff. Agent changes are validated against held-in and held-out cases before the learning is folded back into the suite.
+The improvement flow can start from formal eval artifacts or selected production evidence. It diagnoses failure ownership first: agent behavior, harness/context, tool integration, or the evaluation itself. Then it routes either a direct evidence repair or an engineering handoff. Agent changes are validated against held-in and held-out cases before the learning gets folded back into the suite.
 
 ## Core concepts
 
@@ -102,11 +113,11 @@ The improvement flow can start from formal eval artifacts or selected production
 
 Onboarding creates a local Python environment, installs the repository dependencies, creates `.env` from `.env.example` when needed, installs the repository's commit check, and verifies the Claude Code and Codex adapters.
 
-Model-provider keys are optional individually: configure only the providers you choose for simulation and judging. Langfuse is optional and is used when you want remote traces, datasets, experiments, or production evidence. See [evaluation result providers](docs/references/eval-result-providers.md) for the exact options.
+Model-provider keys are optional individually. Configure only the providers you choose for simulation and judging. Langfuse is also optional; add it when you want remote traces, datasets, experiments, or production evidence. See [evaluation result providers](docs/references/eval-result-providers.md) for the exact options.
 
 ## Evaluation infrastructure
 
-Local execution and remote observability are intentionally separate:
+Local execution and remote observability are kept separate on purpose:
 
 | Component | Why it is here | Do you need an account? |
 |---|---|---|
@@ -126,7 +137,7 @@ LangChain and LangGraph may be recommended when they fit the target agent. They 
 
 ## For people maintaining this repository
 
-The repository works in both Claude Code and Codex. The manuals, skills, and project-agent configuration have shared sources of truth; see [`CLAUDE.md`](CLAUDE.md) before changing them. After changing those shared pieces, run:
+The repository works in both Claude Code and Codex. The manuals, skills, and project-agent configuration have shared sources of truth. See [`CLAUDE.md`](CLAUDE.md) before changing them. After changing those shared pieces, run:
 
 ```bash
 scripts/test-agent-config.sh
