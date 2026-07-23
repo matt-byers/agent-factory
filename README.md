@@ -55,11 +55,13 @@ The repository is opinionated about sequence. Don't optimize prompts before you 
 `/agent-architecture-planner` picks the least autonomous shape that can reliably satisfy your evals, then adds complexity only where evidence shows a simpler shape falls short. There are four shapes to choose from:
 
 - **Model call** — one bounded inference, no tools, no adaptive control flow. Fits a single-use, contained problem, like a one-off extraction of structured data from unstructured text.
-- **Workflow** — steps, branches, and stopping conditions are known in advance, with deterministic routing kept in code. Fits a repeatable, predictable process over unstructured data, or one where a stage needs basic model judgment but the overall path never changes.
-- **Agent** — the outcome is clear but the path to it isn't. Fits one coherent domain where general capabilities are available and the agent needs to reason about which tool to use, in what order, and how to recover from failure.
-- **Multi-agent system** — the problem spans distinct areas of concern that a single agent can't hold at once. Fits larger-scope work where an orchestrator delegates to subagents, each an expert in its own domain, and combines their results.
+- **Workflow** — steps, branches, and stopping conditions are known in advance, with deterministic routing kept in code. Fits a repeatable, predictable process over unstructured data, or one where a stage needs basic model judgment but the overall path never changes. Example: a form-filling flow that captures data from a user and pushes it to a third-party system.
+- **Agent** — the outcome is clear but the path to it isn't. Fits one coherent domain where general capabilities are available and the agent needs to reason about which tool to use, in what order, and how to recover from failure. Example: an FAQ chatbot that answers open-ended questions from a knowledge base.
+- **Multi-agent system** — the problem spans distinct areas of concern that a single agent can't hold at once. Fits larger-scope work where an orchestrator delegates to subagents, each an expert in its own domain, and combines their results. Example: a bug-triager that gathers context and takes actions across multiple systems and workflows, produces a code fix, tests it, and opens a PR.
 
 Each escalation must earn its complexity: it should measurably beat the simpler shape on the same held-in and held-out cases, not just seem more capable in theory.
+
+A single product usually mixes these shapes rather than picking one. They're all still software, and can be triggered and composed however makes sense: a multi-agent system can run as one step inside a deterministic workflow, an agent can call out to a model call for a sub-task, and so on. The point of this hierarchy isn't to pick a shape and stop there. It's to avoid over-engineering, and to push as much of the solution into deterministic, reliable code as the problem allows. Wherever you can shrink an agent's scope by making a piece of it deterministic, do it.
 
 ## Building a first agent
 
