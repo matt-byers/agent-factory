@@ -1,8 +1,8 @@
 # Agent Factory
 
-Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It's not a prompt template or an agent framework. It's a disciplined path from product problem to an agent harness with measurable behavior.
+Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It is built around best-practice open agent frameworks: LangChain and LangGraph for agentic harnesses, LangSmith, AgentEvals, and OpenEvals for evaluation, and Langfuse for observability and remote evidence. It's not a prompt template or an agent framework. It's a disciplined path from product problem to an agent harness with measurable behavior.
 
-Treat an agent as a product with an executable specification. Define the user outcome. Express representative interactions as eval cases. Build the smallest architecture that satisfies them. Use failures as evidence for the next change.
+Treat an agent as a product with an executable specification. Define what “good” looks like with domain experts through golden datasets of representative interactions and observable criteria. Build the smallest architecture that satisfies them, then use failures and production evidence to drive self-healing improvements that are validated against held-in and held-out cases.
 
 ## Quickstart
 
@@ -117,19 +117,21 @@ Onboarding creates a local Python environment, installs the repository dependenc
 
 Model-provider keys are optional individually. Configure only the providers you choose for simulation and judging. Langfuse is also optional; add it when you want remote traces, datasets, experiments, or production evidence. See [evaluation result providers](docs/references/eval-result-providers.md) for the exact options.
 
-## Evaluation infrastructure
+## Package infrastructure
 
-Local execution and remote observability are kept separate on purpose:
+These packages provide the agentic-harness, evaluation, testing, and observability capabilities used by the workflow. Local evaluation and remote observability are kept separate on purpose:
 
 | Component | Why it is here | Do you need an account? |
 |---|---|---|
+| LangChain | A recommended foundation for standard agentic harnesses: model/tool loops, middleware, state, and structured output. | No |
+| LangGraph | A recommended harness foundation for custom state, durable execution, interrupts, and deterministic-plus-agentic workflows. | No |
 | LangSmith Python package | Runs local evaluations without uploading results to LangSmith. | No |
-| AgentEvals | Scores agent behavior, including expected tool-use sequences. | Only a selected judge model when needed |
-| OpenEvals | Provides model-based judges and multi-turn simulated-user conversations. | Only a selected simulator or judge model |
-| Langfuse | Optionally stores remote traces, datasets, experiments, and production evidence. | Yes, if you use it |
+| AgentEvals | Scores agent behavior, including expected tool-use trajectories. | Only a selected judge model when needed |
+| OpenEvals | Provides model-based judges and simulated users for multi-turn conversations. | Only a selected simulator or judge model |
+| Langfuse | Optionally stores remote traces, golden datasets, experiments, and production evidence. | Yes, if you use it |
 | pytest | Tests the repository's lifecycle, artifacts, adapters, and evaluation gates. | No |
 
-LangChain and LangGraph may be recommended when they fit the target agent. They are not requirements for the agent you build.
+LangChain and LangGraph are recommended when they fit the target agent; they are not requirements for every agent you build.
 
 ## Useful references
 
