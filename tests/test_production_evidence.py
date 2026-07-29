@@ -20,6 +20,7 @@ from agent_creation.production_evidence import (
     cleanup_langfuse_trace,
     cleanup_promotion,
     promote_evidence,
+    query_langfuse_trace_inventory,
     query_langfuse_traces,
     select_langfuse_trace,
 )
@@ -30,7 +31,12 @@ START = datetime(2026, 7, 1, tzinfo=timezone.utc)
 END = datetime(2026, 7, 18, tzinfo=timezone.utc)
 
 
-def trace(identifier: str, *, duplicate_secret: bool = True) -> SimpleNamespace:
+def trace(
+    identifier: str,
+    *,
+    duplicate_secret: bool = True,
+    scores: list[Any] | None = None,
+) -> SimpleNamespace:
     return SimpleNamespace(
         id=identifier,
         name="shopping-agent",
@@ -39,6 +45,7 @@ def trace(identifier: str, *, duplicate_secret: bool = True) -> SimpleNamespace:
         output={"answer": "Bearer dangerous-token"},
         metadata={"api_key": SECRET, "environment": "production"},
         tags=["production", "failure"],
+        scores=scores or [],
     )
 
 
@@ -52,7 +59,10 @@ class RecordingLangfuseTraceApi:
         page = kwargs["page"]
         return SimpleNamespace(
             data=self.pages.get(page, []),
-            meta=SimpleNamespace(total_pages=max(self.pages, default=1)),
+            meta=SimpleNamespace(
+                total_pages=max(self.pages, default=1),
+                total_items=sum(len(items) for items in self.pages.values()),
+            ),
         )
 
     def get(self, trace_id: str) -> Any:
@@ -102,10 +112,29 @@ def test_langfuse_query_filters_and_pages_through_native_trace_api() -> None:
         "filter": 'and(eq(status, "error"), has(tags, "failure"))',
         "from_timestamp": START.isoformat(),
         "to_timestamp": END.isoformat(),
-        "fields": "core,io",
+        "fields": "core,io,scores",
         "limit": 2,
         "page": 1,
     }
+
+
+def test_inventory_retains_provider_total_truncation_and_native_scores() -> None:
+    score = SimpleNamespace(name="helpfulness", value=0.4)
+    client = RecordingLangfuseClient(
+        {
+            1: [trace("lf-1", scores=[score]), trace("lf-2")],
+            2: [trace("lf-3")],
+            3: [trace("lf-4")],
+        }
+    )
+    query = evidence_query()
+
+    inventory = query_langfuse_trace_inventory(client, query)
+
+    assert inventory.eligible_count == 4
+    assert inventory.inspected_count == 3
+    assert inventory.truncated is True
+    assert inventory.traces[0].scores == {"helpfulness": 0.4}
 
 
 def test_exact_trace_selection_retains_provider_source_link() -> None:

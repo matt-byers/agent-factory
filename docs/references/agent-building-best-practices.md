@@ -1,6 +1,6 @@
 # Agent-Building Best Practices
 
-Last verified: 2026-07-17
+Last verified: 2026-07-28
 
 This maintained reference turns the source inventory below into decision guidance for architecture planning, behavior review, and evidence-driven improvement. It is guidance, not a substitute for current provider documentation or evaluation against the target use case. Recommendations should cite the relevant source marker, requirement or evidence, expected effect, and acceptance eval.
 
@@ -62,7 +62,9 @@ Measure context changes with task success, retrieval precision, token use, laten
 
 ## Evaluation and observability
 
-Define success before architecture. Build representative cases from real tasks, risks, and boundary conditions; include deterministic checks, output rubrics, trajectory checks, and a realistic simulated user when interaction matters. Keep an inaccessible held-out set for selection control. [S2] [S10]
+Define success before architecture. Build representative cases from real tasks, risks, and boundary conditions; include deterministic checks, output rubrics, trajectory checks, and a realistic simulated user when interaction matters. Keep an inaccessible held-out set for selection control. [S2] [S10] [S12] [S13]
+
+Keep evaluation mode separate from result destination. Offline evaluation runs a controlled agent version against a fixed dataset before release; it may execute locally or as a remote provider experiment. Online evaluation scores filtered or sampled live production traces without rerunning the target agent. Production monitoring observes live metrics and errors but is not automatically a behavioral eval. Use `docs/references/online-offline-evaluation.md` for the complete operational distinction. [S12] [S13] [S14] [S17]
 
 Evaluate both the result and the path:
 
@@ -73,6 +75,12 @@ Evaluate both the result and the path:
 Retain enough trace evidence to reproduce and assign failures: versioned prompt and model configuration, input, messages, tool calls and results, state transitions, errors, usage, timing, termination reason, and artifact identifiers. Redact secrets and sensitive data at the persistence boundary. Do not infer hidden reasoning from prose; diagnose observable decisions and effects.
 
 Use deterministic evaluators for contracts and invariants, structured rubrics for qualities that need judgment, and multiple trials when model variance can change the conclusion. Provider or harness failures are inconclusive evidence, not target-agent regressions.
+
+Plan online evaluation before the agent becomes operational. Bind each live evaluator to an offline requirement, the trace evidence it can actually observe, narrow filters, a sampling rate, a score floor, an expert-review policy, privacy constraints, and a feedback route. Do not deploy hidden reference answers, simulated-user private truth, or sealed held-out criteria into production graders. [S13] [S14] [S17]
+
+Measure online evaluator coverage before interpreting quality. Preserve the eligible population, inspected count, fully scored count, missing or partial scores, evaluator errors, failures and per-evaluator aggregates. A bounded query result is not the population denominator. Use provider-native aggregation for large populations and keep content capture explicit and privacy-aware. [S15] [S16] [S17]
+
+Combine score-floor failures with a bounded random sample of apparently passing traces for human calibration. Failure-only review cannot reveal grader false positives or agent failures missed by the grader. Use domain experts to calibrate automated judgments, inspect conversations, and assign failures to the agent, evaluator, provider/instrumentation, or missing eval coverage. Promote reviewed production failures into held-in regression cases; never directly into held-out coverage. [S12] [S13] [S18]
 
 ## Safety, control, and failure recovery
 
@@ -119,6 +127,7 @@ The canonical consumers are listed here before their implementation units create
 - `.claude/skills/agent-architecture-planner/SKILL.md`
 - `.claude/skills/agent-behavior-review/SKILL.md`
 - `.claude/skills/agent-self-improvement/SKILL.md`
+- `.claude/skills/agent-online-eval-planner/SKILL.md`
 
 ## Source inventory
 
@@ -137,3 +146,10 @@ The Anthropic PDF is the canonical architecture source; the similarly named engi
 | S9 | `langgraph-workflows` | [LangGraph, *Workflows and agents*](https://docs.langchain.com/oss/python/langgraph/workflows-agents) — routing, parallelization, orchestrator-worker, evaluator-optimizer, and agent patterns. | 2026-07-17 |
 | S10 | `react-paper` | [Yao et al., *ReAct: Synergizing Reasoning and Acting in Language Models*](https://arxiv.org/abs/2210.03629) — interleaved reasoning and environment actions as an agent design and evaluation foundation. | 2026-07-17 |
 | S11 | `harness-engineering` | [Lilian Weng, *Harness Engineering for Self-Improvement*](https://lilianweng.github.io/posts/2026-07-04-harness/) — eval-grounded diagnosis, bounded harness changes, validation, and compounding improvement. | 2026-07-17 |
+| S12 | `anthropic-agent-evals` | [Anthropic, *Demystifying evals for AI agents*](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) — complementary automated evals, production monitoring, transcript review, human calibration, trace inspection, regression and capability suites. | 2026-07-28 |
+| S13 | `openai-eval-best-practices` | [OpenAI, *Evaluation best practices*](https://developers.openai.com/api/docs/guides/evaluation-best-practices) — continuous evaluation, production-derived datasets, logging, task-specific metrics and human calibration. | 2026-07-28 |
+| S14 | `openai-trace-grading` | [OpenAI, *Trace grading*](https://developers.openai.com/api/docs/guides/trace-grading) — structured trace scores, filtered trace runs and diagnosis of end-to-end agent behavior. | 2026-07-28 |
+| S15 | `google-agent-observability` | [Google Agents CLI, *Observability*](https://google.github.io/agents-cli/guide/observability/) — production tracing, prompt-response logging, content-capture boundaries and online operational telemetry. | 2026-07-28 |
+| S16 | `google-bigquery-agent-analytics` | [Google Agents CLI, *BigQuery Agent Analytics*](https://google.github.io/agents-cli/guide/observability/bq-agent-analytics/) — queryable production behavior, conversation grouping, error identification, dashboards and LLM-as-judge scoring. | 2026-07-28 |
+| S17 | `langfuse-evaluation-concepts` | [Langfuse, *Evaluation core concepts*](https://langfuse.com/docs/evaluation/core-concepts) — offline dataset experiments, online live-trace scoring, scores, dashboards and the production-to-dataset loop. | 2026-07-28 |
+| S18 | `langfuse-annotation-queues` | [Langfuse, *Annotation queues*](https://langfuse.com/docs/evaluation/evaluation-methods/annotation-queues) — structured domain-expert review, score configuration, corrections and team annotation workflows. | 2026-07-28 |

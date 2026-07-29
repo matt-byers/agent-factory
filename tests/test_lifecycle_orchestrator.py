@@ -17,6 +17,7 @@ from agent_creation.engineering_handoff import create_handoff, digest, route_man
 from agent_creation.baseline_evaluation import evaluate_baseline
 from agent_creation.validation_gates import evaluate_held_in, evaluate_held_out
 from agent_creation.eval_compound_learnings import record_eval_loop_learning
+from agent_creation.online_evaluation import create_online_eval_plan
 
 
 COMMAND = REPOSITORY_ROOT / "scripts" / "agent-lifecycle"
@@ -262,6 +263,19 @@ def write_eval_artifacts(root: Path) -> None:
     )
 
 
+def write_online_eval_plan(root: Path) -> None:
+    create_online_eval_plan(
+        root,
+        {
+            "version": 1,
+            "status": "complete",
+            "mode": "disabled",
+            "reason": "Fixture target is not connected to production traffic.",
+        },
+        {"fixture-case", "fixture-held-out"},
+    )
+
+
 def write_receipt(root: Path, name: str = "receipt.json", handoff_id: str = "handoff-1") -> Path:
     kind = "build" if (root / "agent-lifecycle/handoffs/build-handoff.yaml").is_file() else "improvement"
     manifest_path = route_manifest(root, kind)
@@ -289,6 +303,8 @@ def advance_first_build_to_engineering(root: Path, engineering_loop: str = "incl
     write_goal_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "eval_design"
     write_eval_artifacts(root)
+    assert payload(run(root, "next"))["stage"] == "online_eval_design"
+    write_online_eval_plan(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write_architecture_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "awaiting_engineering"
@@ -304,7 +320,7 @@ def test_setup_persists_cli_selections_and_is_idempotent(tmp_path: Path) -> None
         "simulator-model",
         "--judge-model",
         "judge-model",
-        "--evidence-mode",
+        "--eval-destination",
         "local",
         "--engineering-loop",
         "included",
@@ -316,7 +332,7 @@ def test_setup_persists_cli_selections_and_is_idempotent(tmp_path: Path) -> None
         "simulator-model",
         "--judge-model",
         "judge-model",
-        "--evidence-mode",
+        "--eval-destination",
         "local",
         "--engineering-loop",
         "included",
@@ -328,7 +344,7 @@ def test_setup_persists_cli_selections_and_is_idempotent(tmp_path: Path) -> None
         "version": 1,
         "simulator_model": "simulator-model",
         "judge_model": "judge-model",
-        "evidence_mode": "local",
+        "eval_destination": "local",
         "engineering_loop": "included",
     }
     assert payload(second)["stage"] == "not_started"
@@ -446,6 +462,8 @@ def test_upstream_artifact_change_rewinds_to_earliest_affected_stage(tmp_path: P
     write_goal_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "eval_design"
     write_eval_artifacts(root)
+    assert payload(run(root, "next"))["stage"] == "online_eval_design"
+    write_online_eval_plan(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write(root, "agent-lifecycle/agent-definition/project-brief.md", "changed upstream definition\n")
 
@@ -577,6 +595,8 @@ def test_unapproved_handoff_cannot_route_to_engineering(tmp_path: Path) -> None:
     write_goal_artifacts(root)
     assert payload(run(root, "next"))["stage"] == "eval_design"
     write_eval_artifacts(root)
+    assert payload(run(root, "next"))["stage"] == "online_eval_design"
+    write_online_eval_plan(root)
     assert payload(run(root, "next"))["stage"] == "architecture"
     write_architecture_artifacts(root)
     write(

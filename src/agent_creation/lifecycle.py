@@ -11,6 +11,7 @@ from .business_value import YAML_PATH as BUSINESS_YAML_PATH
 from .business_value import validate_projection
 from .eval_design import SUITE_PATH, read_suite, validate_suite
 from .goal_definition import BRIEF_PATH, METRICS_PATH, validate_artifacts
+from .online_evaluation import PLAN_PATH as ONLINE_PLAN_PATH, validate_online_eval_plan
 from .engineering_handoff import (
     EngineeringHandoffError,
     digest as handoff_digest,
@@ -43,6 +44,11 @@ FIRST_BUILD = (
     ),
     Stage("eval_design", "/agent-eval-designer", ("agent-lifecycle/evals/suite.yaml",)),
     Stage(
+        "online_eval_design",
+        "/agent-online-eval-planner",
+        ("agent-lifecycle/evals/online-eval-plan.yaml",),
+    ),
+    Stage(
         "architecture",
         "/agent-architecture-planner",
         (
@@ -68,7 +74,7 @@ FIRST_BUILD = (
 IMPROVEMENT = (
     Stage(
         "evidence",
-        "/eval-agent or /agent-production-evidence",
+        "/eval-agent, /agent-online-eval-planner monitor, or /agent-production-evidence",
         any_of=(
             "agent-lifecycle/evals/latest-run.yaml",
             "agent-lifecycle/evidence/selected-evidence.yaml",
@@ -235,6 +241,18 @@ def validate_stage_artifacts(root: Path, state: dict[str, Any], stage: Stage) ->
         if issues:
             raise LifecycleError("eval suite is invalid: " + "; ".join(issues))
         return
+    if stage.name == "online_eval_design":
+        plan = read_json(root / ONLINE_PLAN_PATH, "online eval plan")
+        suite = read_suite(root / SUITE_PATH)
+        available_eval_ids = {
+            item["id"]
+            for item in suite.get("cases", [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        issues = validate_online_eval_plan(plan, available_eval_ids)
+        if issues:
+            raise LifecycleError("online eval plan is invalid: " + "; ".join(issues))
+        return
     if stage.name == "architecture_reconciliation":
         from .resume_reconcile import validate_reconciliation
 
@@ -339,7 +357,7 @@ def setup(
     root: Path,
     simulator_model: str,
     judge_model: str,
-    evidence_mode: str,
+    eval_destination: str,
     engineering_loop: str,
 ) -> dict[str, Any]:
     if engineering_loop not in {"included", "external"}:
@@ -349,7 +367,7 @@ def setup(
         "version": 1,
         "simulator_model": simulator_model,
         "judge_model": judge_model,
-        "evidence_mode": evidence_mode,
+        "eval_destination": eval_destination,
         "engineering_loop": engineering_loop,
     }
     atomic_write(root / SETUP_PATH, configuration)

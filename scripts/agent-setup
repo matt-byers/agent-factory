@@ -45,5 +45,22 @@ if [[ "$SKIP_DEPENDENCIES" == false ]]; then
 fi
 
 scripts/agent-config/install_git_hooks.sh
-python3 scripts/agent-config/verify_agent_config.py
+VERIFY_PYTHON=""
+if [[ -x .venv/bin/python ]]; then
+  VERIFY_PYTHON=".venv/bin/python"
+else
+  for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      if "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+        VERIFY_PYTHON="$(command -v "$candidate")"
+        break
+      fi
+    fi
+  done
+fi
+if [[ -z "$VERIFY_PYTHON" ]]; then
+  printf 'Python 3.11 or newer is required for repository verification\n' >&2
+  exit 1
+fi
+"$VERIFY_PYTHON" scripts/agent-config/verify_agent_config.py
 printf 'setup complete\n'
