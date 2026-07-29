@@ -5,17 +5,17 @@ description: Query production Langfuse traces, select and locally redact evidenc
 
 # Agent Production Evidence
 
-Collect evidence for the target agent only. Do not diagnose it, change the agent, create provider experiments, or mutate surrounding application systems.
+Collect selected production evidence for the target agent only. Do not diagnose it, change the agent, create provider experiments, configure online evaluators, or mutate surrounding application systems. `/agent-online-eval-planner` owns online scoring, population reports and expert-review selection.
 
 ## Query
 
-Invoke the maintained host `/langfuse` skill when available; otherwise use the native Langfuse traces SDK/API. Apply narrow project, time, tag, status, user, or metadata filters and a bounded page limit.
+Invoke the maintained host `/langfuse` skill when available; otherwise use the native Langfuse traces SDK/API. Apply narrow project, time, tag, status, user, score, or metadata filters and a bounded page limit. Use `query_langfuse_trace_inventory` when counts matter so the provider-reported eligible count and query truncation remain distinct from the inspected traces.
 
 Retain the provider trace identifier and direct source link. Keep raw provider payloads in memory only and pass selected traces through `agent_creation.production_evidence` before writing local artifacts.
 
 ## Promote
 
-Select one exact trace with the provider-native get operation. Redact secret-shaped keys, assignments, and bearer tokens locally, then call `promote_evidence` with either:
+Select one exact trace with the provider-native get operation. When it came from online evaluation, require a completed expert disposition from the review batch before promotion. Redact secret-shaped keys, assignments, and bearer tokens locally, then call `promote_evidence` with either:
 
 - `diagnostic` to write `agent-lifecycle/evidence/selected-evidence.yaml` for `/agent-behavior-review`.
 - `eval` to write one candidate under `agent-lifecycle/evals/candidates/` for `/agent-eval-designer` to review and incorporate.

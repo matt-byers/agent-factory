@@ -10,7 +10,7 @@ Improve measurement quality after each conclusive improvement attempt. Keep this
 ## Workflow
 
 1. Read the accepted or rejected held-in or held-out decision and its immutable source evidence.
-2. Identify only evidence-supported weaknesses in eval cases, simulated-user behavior, rubrics, evidence capture, provider workflow, comparison gates, or eval operator guidance.
+2. Identify only evidence-supported weaknesses in offline eval cases, simulated-user behavior, rubrics, online evaluator mappings or calibration, evidence capture, provider workflow, comparison gates, or eval operator guidance.
 3. Apply the smallest supported changes to those eval-loop surfaces. If the evidence supports no change, record a concise no-op reason.
 4. Inspect every changed path. Reject target agent, surrounding application, `/agent-build-loop`, `/spec-plan`, and other engineering-loop changes.
 5. Call `record_eval_loop_learning(root, improvements, no_op_reason=...)` from `agent_creation.eval_compound_learnings`. Give each improvement a lowercase hyphen-case `id`, an allowed `category`, a concise `summary`, one or more repository `path#anchor` evidence references, and the exact `changed_paths`.

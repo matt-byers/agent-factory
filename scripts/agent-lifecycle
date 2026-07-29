@@ -21,7 +21,18 @@ def parser() -> argparse.ArgumentParser:
     setup_command = subcommands.add_parser("setup")
     setup_command.add_argument("--simulator-model", required=True)
     setup_command.add_argument("--judge-model", required=True)
-    setup_command.add_argument("--evidence-mode", choices=("local", "langfuse"), required=True)
+    destination = setup_command.add_mutually_exclusive_group(required=True)
+    destination.add_argument(
+        "--eval-destination",
+        choices=("local", "langfuse"),
+        help="destination for controlled offline eval runs",
+    )
+    destination.add_argument(
+        "--evidence-mode",
+        dest="eval_destination",
+        choices=("local", "langfuse"),
+        help=argparse.SUPPRESS,
+    )
     setup_command.add_argument("--engineering-loop", choices=("included", "external"), required=True)
 
     start_command = subcommands.add_parser("start")
@@ -44,7 +55,7 @@ def main() -> int:
                 root,
                 arguments.simulator_model,
                 arguments.judge_model,
-                arguments.evidence_mode,
+                arguments.eval_destination,
                 arguments.engineering_loop,
             )
         elif arguments.command == "start":

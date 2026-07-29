@@ -21,9 +21,11 @@ Configure lifecycle providers and engineering-loop selection:
 scripts/agent-lifecycle setup \
   --simulator-model <model> \
   --judge-model <model> \
-  --evidence-mode <local|langfuse> \
+  --eval-destination <local|langfuse> \
   --engineering-loop <included|external>
 ```
+
+`--eval-destination` selects where controlled offline eval runs are stored. It does not define offline versus online evaluation: `/eval-agent --destination langfuse` is a remote offline experiment, while `/agent-online-eval-planner` owns live-trace scoring and review. The old `--evidence-mode` spelling remains a hidden compatibility alias.
 
 Then use:
 
@@ -39,6 +41,8 @@ scripts/agent-lifecycle resume --receipt agent-lifecycle/receipts/<receipt>.json
 
 1. Run `status` before acting and report its stage and exact `next` value.
 2. Invoke the returned skill or complete the returned external action.
+   - After offline eval design, require `/agent-online-eval-planner` to create an enabled or explicitly disabled plan before architecture.
+   - During improvement, evidence may come from an offline eval run, an expert-reviewed online review batch, or selected production evidence.
 3. Run `next`; allow it to advance only after the current stage's artifacts validate.
 4. When the included loop is selected, invoke `/agent-build-loop` with the active handoff. When an external loop is selected, provide that loop the same handoff and receipt contract.
 5. At `awaiting_engineering`, run `scripts/engineering-handoff prepare --kind <build|improvement>` and pass that unchanged contract to the selected loop. Run the included loop immediately or pause while the selected external loop works.

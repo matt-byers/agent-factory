@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 import hashlib
 import json
@@ -62,6 +62,18 @@ class ProductionTrace:
     metadata: Any
     tags: tuple[str, ...]
     source_link: str
+    scores: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TraceInventory:
+    eligible_count: int
+    traces: tuple[ProductionTrace, ...]
+    truncated: bool
+
+    @property
+    def inspected_count(self) -> int:
+        return len(self.traces)
 
 
 @dataclass(frozen=True)
@@ -72,8 +84,15 @@ class PromotionResult:
 
 
 def query_langfuse_traces(client: Any | None, query: EvidenceQuery) -> tuple[ProductionTrace, ...]:
+    return query_langfuse_trace_inventory(client, query).traces
+
+
+def query_langfuse_trace_inventory(
+    client: Any | None, query: EvidenceQuery
+) -> TraceInventory:
     _require_client(client, "Langfuse")
     traces: list[ProductionTrace] = []
+    eligible_count: int | None = None
     try:
         for page in range(1, query.max_pages + 1):
             arguments = _without_none(
@@ -82,7 +101,7 @@ def query_langfuse_traces(client: Any | None, query: EvidenceQuery) -> tuple[Pro
                     "filter": query.filter_expression,
                     "from_timestamp": _isoformat(query.from_timestamp),
                     "to_timestamp": _isoformat(query.to_timestamp),
-                    "fields": "core,io",
+                    "fields": "core,io,scores",
                     "limit": query.page_size,
                     "page": page,
                 }
@@ -100,11 +119,21 @@ def query_langfuse_traces(client: Any | None, query: EvidenceQuery) -> tuple[Pro
             total_pages = _value(_value(response, "meta", {}), "total_pages")
             if total_pages is None:
                 total_pages = _value(_value(response, "meta", {}), "totalPages")
+            total_items = _value(_value(response, "meta", {}), "total_items")
+            if total_items is None:
+                total_items = _value(_value(response, "meta", {}), "totalItems")
+            if isinstance(total_items, int):
+                eligible_count = total_items
             if not items or len(items) < query.page_size or (
                 isinstance(total_pages, int) and page >= total_pages
             ):
                 break
-        return tuple(traces)
+        eligible_count = len(traces) if eligible_count is None else eligible_count
+        return TraceInventory(
+            eligible_count=eligible_count,
+            traces=tuple(traces),
+            truncated=len(traces) < eligible_count,
+        )
     except Exception as error:
         raise _provider_error("langfuse", "query", error) from error
 
@@ -209,7 +238,20 @@ def _normalize_trace(provider: str, trace: Any, source_link: str) -> ProductionT
         metadata=_redact(_value(trace, "metadata", _value(trace, "extra", {}))),
         tags=tuple(str(tag) for tag in _value(trace, "tags", []) or []),
         source_link=redact_diagnostic(str(source_link)),
+        scores=_normalize_scores(_value(trace, "scores", []) or []),
     )
+
+
+def _normalize_scores(values: Any) -> dict[str, float]:
+    scores: dict[str, float] = {}
+    if not isinstance(values, (list, tuple)):
+        return scores
+    for item in values:
+        name = _value(item, "name")
+        value = _value(item, "value")
+        if isinstance(name, str) and isinstance(value, (int, float)) and not isinstance(value, bool):
+            scores[name] = float(value)
+    return scores
 
 
 def _redact(value: Any, key: str | None = None) -> Any:

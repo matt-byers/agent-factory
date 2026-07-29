@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "status": "complete",
+  "mode": "enabled",
+  "provider": "langfuse",
+  "trace_scope": {
+    "trace_name": "<target-agent-trace-name>",
+    "environment": "production",
+    "filters": {}
+  },
+  "evaluators": [
+    {
+      "id": "<online-evaluator-id>",
+      "source_eval_ids": ["<offline-eval-case-id>"],
+      "target": "trace",
+      "method": "llm_judge",
+      "score_name": "<provider-score-name>",
+      "sampling_rate": 0.1,
+      "score_floor": 0.8,
+      "input_mapping": {
+        "input": "trace.input",
+        "output": "trace.output"
+      }
+    }
+  ],
+  "review_policy": {
+    "queue_name": "<expert-annotation-queue>",
+    "expert_role": "<domain-expert-role>",
+    "cadence": "weekly",
+    "failure_limit": 20,
+    "random_sample_limit": 5,
+    "include_unscored": true
+  },
+  "privacy": {
+    "content_capture": "approved",
+    "redaction_required": true,
+    "retention_days": 30
+  },
+  "feedback_routes": {
+    "agent_failure": "agent-improvement",
+    "eval_failure": "eval-improvement",
+    "provider_failure": "evidence-repair",
+    "new_coverage": "eval-candidate"
+  }
+}

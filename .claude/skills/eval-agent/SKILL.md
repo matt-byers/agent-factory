@@ -7,6 +7,8 @@ description: List and run repository agent eval cases through LangSmith's native
 
 Run evals and produce evidence. Do not diagnose root causes or recommend target-agent changes.
 
+This skill runs **offline evaluation**: controlled target-agent executions against fixed suite cases. `--destination` selects where that offline experiment is stored. A Langfuse destination is not online evaluation. Use `/agent-online-eval-planner` to score and review live production traces.
+
 ## Commands
 
 ```bash
@@ -19,6 +21,8 @@ scripts/agent-eval held-out --results <complete-candidate-held-out-run.json>
 ```
 
 Local execution uses LangSmith `evaluate` with local examples and `upload_results=False`; LangSmith is an internal runner dependency, not a hosted destination, and needs no account or key. The Langfuse destination creates one provider-native dataset experiment and never duplicates it locally. AgentEvals owns trajectory evaluation, OpenEvals owns supported qualitative evaluators and multi-turn simulation, and repository evaluators are limited to declared deterministic invariants. Provider capabilities, credentials, source links, and sandbox cleanup are documented in `docs/references/eval-result-providers.md`.
+
+Read `docs/references/online-offline-evaluation.md` before describing an eval mode or routing production traces.
 
 The target command must implement the JSONL `start`, `turn`, and `end` protocol. Each trial gets a new process. Target, provider, protocol, or evaluator failures are inconclusive and must not be reported as agent-quality rejections.
 

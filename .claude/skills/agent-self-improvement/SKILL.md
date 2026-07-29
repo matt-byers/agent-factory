@@ -7,7 +7,7 @@ description: Coordinate evidence-driven target-agent improvement from eval or pr
 
 Coordinate the loop; delegate evidence collection to `/eval-agent` or `/agent-production-evidence` and qualitative diagnosis to `/agent-behavior-review`. Read `docs/references/agent-building-best-practices.md` before accepting an agent recommendation.
 
-1. Select one diagnostic source: a native eval run, promoted production trace, or bounded exploratory `testagent` transcript.
+1. Select one diagnostic source: a native offline eval run, an expert-reviewed online-eval failure promoted as production evidence, another promoted production trace, or a bounded exploratory `testagent` transcript.
 2. Invoke `/agent-behavior-review` and require deterministic ownership plus reproducibility evidence.
 3. For eval-definition, simulated-user, target-data, harness, provider, or evidence ownership, repair that repository surface, rerun only affected test cases, and return the new artifacts directly to diagnosis. Do not invoke an engineering loop or agent held-in/held-out gates.
 4. For surrounding-application ownership, retain evidence, name the database/service/API/auth/infrastructure/UI/UX owner, and stop without an agent recommendation.

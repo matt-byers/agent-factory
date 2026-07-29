@@ -2,10 +2,12 @@
 
 Every eval selection runs exactly once through one destination. Provider adapters record the native result; they do not create a second local experiment.
 
+This page describes **offline eval destinations**. Local versus Langfuse says where a controlled dataset experiment executes and stores results; it does not mean offline versus online. Online evaluation of live production traces is defined in [offline and online evaluation](online-offline-evaluation.md).
+
 ## Capabilities
 
 - Local (`--destination local`) uses LangSmith `evaluate`/`aevaluate` with the Unit 2.2 evaluator functions and `upload_results=False`. It creates no remote dataset, experiment, score, or trace.
-- Langfuse (`--destination langfuse`) creates native dataset items with optional source trace and observation links, runs one native dataset experiment, stores evaluator outputs as native scores, flushes the short-lived client, and returns trace links.
+- Langfuse (`--destination langfuse`) creates native dataset items with optional source trace and observation links, runs one native **offline** dataset experiment, stores evaluator outputs as native scores, flushes the short-lived client, and returns trace links.
 
 LangSmith is an internal local-runner dependency only. It needs no LangSmith account, environment variables, or remote upload. Langfuse is the only remote destination. Missing Langfuse credentials or provider failures are inconclusive evidence and never fall back to local execution automatically.
 

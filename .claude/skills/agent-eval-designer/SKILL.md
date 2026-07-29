@@ -34,6 +34,6 @@ scripts/agent-eval-designer render --input <suite.json>
 scripts/agent-eval-designer validate
 ```
 
-8. Report the suite path and case counts by tag and split. Run `scripts/agent-lifecycle next` only after validation succeeds.
+8. Report the suite path and case counts by tag and split. Run `scripts/agent-lifecycle next` only after validation succeeds, then hand off the resulting `online_eval_design` stage to `/agent-online-eval-planner`.
 
 Never expose private truth, graders, expected outcomes, or sealed held-out payloads to the target agent. Do not open held-out payloads before the held-out lifecycle gate. Leave execution to `/eval-agent`.

@@ -31,7 +31,7 @@ Offer model providers in this order, allowing the user to skip any they will not
 - `OPENAI_API_KEY`: create a project API key at https://platform.openai.com/api-keys.
 - `GOOGLE_API_KEY`: create a Gemini API key at https://aistudio.google.com/app/apikey.
 
-Then explain that Langfuse is optional: local evals need no hosted eval account, while Langfuse enables remote experiments and production-trace evidence. If selected, create project credentials using https://langfuse.com/docs/observability/get-started and configure these one at a time:
+Then explain that Langfuse is optional: offline evals can run locally without a hosted eval account, while Langfuse enables remotely stored offline experiments, online scoring of live production traces, expert annotation queues, and production-trace evidence. Remote storage does not by itself make an eval online. If selected, create project credentials using https://langfuse.com/docs/observability/get-started and configure these one at a time:
 
 - `LANGFUSE_PUBLIC_KEY`
 - `LANGFUSE_SECRET_KEY`
@@ -44,7 +44,8 @@ Finish by running `scripts/agent-onboard status`. Do not require skipped provide
 Explain the two flows concisely:
 
 - **Initial agent setup:** define the user problem and commercial value, design evals and a simulated user, plan the architecture, hand off implementation, and establish a measured baseline.
-- **Evals-led self-improvement:** start from eval results or a production trace, diagnose the behavior, make an evidence-linked change or eval repair, validate held-in and held-out cases, and repeat when useful.
+- **Online evaluation setup:** before architecture, define how live traces will be filtered, sampled, scored, reviewed by experts, and fed back—or explicitly record why online evaluation is disabled.
+- **Evals-led self-improvement:** start from offline eval results, an expert-reviewed online failure, or another selected production trace; diagnose the behavior, make an evidence-linked change or eval repair, validate held-in and held-out cases, and repeat when useful.
 
 Mention that Agent Factory changes only the agent harness and context. Its included tests-first engineering loop is interchangeable with another loop or a standard coding agent.
 

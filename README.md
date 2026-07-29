@@ -1,8 +1,12 @@
 # Agent Factory
 
-Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It is built around best-practice open agent frameworks: LangChain and LangGraph for agentic harnesses, LangSmith, AgentEvals, and OpenEvals for evaluation, and Langfuse for observability and remote evidence. It's not a prompt template or an agent framework. It's a disciplined path from product problem to an agent harness with measurable behavior.
+Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It is built around best-practice open agent frameworks: LangChain and LangGraph for agentic harnesses, LangSmith, AgentEvals, and OpenEvals for evaluation, and Langfuse for observability and remote evidence.
 
-Treat an agent as a product with an executable specification. Define what “good” looks like with domain experts through golden datasets of representative interactions and observable criteria. Build the smallest architecture that satisfies them, then use failures and production evidence to drive self-healing improvements that are validated against held-in and held-out cases.
+The philosophy of this repo is to start with a clear problem to solve, define what success looks like, build the smallest and most reliable architecture to satisfy the goal, and then set up an evals-based infrastructure to work towards this outcome over time.
+
+## Who is this for?
+
+Agent factory is for anyone. Product managers, engineers, sales, ops - like any good product, all you need to know is the problem you want to solve, and who you're trying to solve it for.
 
 ## Quickstart
 
@@ -18,6 +22,8 @@ Start the guided setup and lifecycle:
 ```text
 /onboard
 ```
+
+Invoke `/onboard` in your coding agent after cloning. The repository-owned procedure lives in [the onboarding skill](.claude/skills/onboard/).
 
 `/onboard` prepares the local environment, configures the providers you need, and explains the first-build and improvement flows. It then hands off to the lifecycle orchestrator, which routes you through the relevant skills. You don't need to plan the whole process up front.
 
@@ -69,9 +75,10 @@ Start at `/onboard`. The first-build flow takes you through:
 
 1. `/agent-goal-interview` — creates a brief with the target users, product problem, business value, scope, risks, and success metrics.
 2. `/agent-eval-designer` — designs the eval suite, including simulated users, deterministic checks where possible, qualitative rubrics where necessary, and held-out coverage.
-3. `/agent-architecture-planner` — produces an architecture picture and an implementation handoff derived from the goal and evals.
-4. `/spec-plan` and `/agent-build-loop`, or your preferred engineering loop — implements the agreed handoff.
-5. `/eval-agent` — runs a baseline evaluation against the completed target agent.
+3. `/agent-online-eval-planner` — records how production traces will be sampled, scored, reviewed and routed back into improvement, or explicitly records why online evaluation is disabled.
+4. `/agent-architecture-planner` — produces an architecture picture and an implementation handoff derived from the goal and evals.
+5. `/spec-plan` and `/agent-build-loop`, or your preferred engineering loop — implements the agreed handoff.
+6. `/eval-agent` — runs a baseline evaluation against the completed target agent.
 
 The output is more than a working demo. You get a target agent plus an artifact trail explaining what it's meant to do, how it's tested, and which baseline results it achieved.
 
@@ -86,6 +93,21 @@ An eval case represents a user interaction, not an isolated prompt/response. It 
 The simulated user and target agent converse. The evaluation run captures the conversation and grades the resulting behavior. Use deterministic checks for facts, schemas, tool calls, and other stable properties. Save model-based judges for behavior that genuinely needs qualitative judgment, and keep the rubric narrow.
 
 Cases that expose a known defect become **held-in** regression coverage. Similar cases stay **held-out** so a fix has to generalize instead of overfitting to the example. This distinction is what turns a pile of demos into an evaluation suite.
+
+## Offline and online evaluation
+
+Agent Factory treats evaluation mode and result destination as separate decisions:
+
+- **Offline evaluation** runs a controlled agent version against a fixed, versioned dataset before release. It may run locally or as a remote Langfuse experiment.
+- **Online evaluation** scores filtered or sampled live production traces without rerunning the target agent.
+- **Production monitoring** observes operational metrics and errors; it becomes an online behavioral eval only when explicit evaluators assign scores.
+- **Production evidence** is a bounded, reviewed trace promoted from online monitoring into diagnosis or eval design.
+
+`--destination langfuse` therefore means a remotely stored **offline experiment**, not an online eval.
+
+Before architecture, `/agent-online-eval-planner` creates an enabled or explicitly disabled online-eval plan. Enabled plans bind offline requirements to production-observable evaluators, filters, sampling, score floors, expert annotation, privacy constraints and feedback routes. During operation, the flow reports eligible/scored/failed counts, selects threshold failures plus missing-score and random calibration samples, sends links to a Langfuse annotation queue, then routes expert dispositions to agent improvement, eval repair, evidence repair or new offline coverage.
+
+See [offline and online evaluation](docs/references/online-offline-evaluation.md) for the complete distinction and operating loop.
 
 ## Improving an existing agent
 
@@ -104,11 +126,13 @@ The improvement flow can start from formal eval artifacts or selected production
 | **Target agent** | The LLM-based system being built or improved, including its prompt, context, tools, state, and control flow. |
 | **Agent harness** | The code and configuration that invokes the model, assembles context, exposes tools, manages state, and returns behavior to the user. |
 | **Eval** | A repeatable experiment that measures whether the target agent satisfies a defined behavior or user outcome. |
+| **Offline eval** | A controlled run against a fixed dataset before release, executed locally or as a remote experiment. |
+| **Online eval** | Scoring of filtered or sampled live production traces without rerunning the target agent. |
 | **Simulated user** | A model-driven user with a goal and private context, used to produce realistic multi-turn interactions. |
 | **Trajectory** | The sequence of messages, tool calls, state changes, and outcomes produced during an agent interaction. |
 | **Held-in case** | A known scenario used for development and regression prevention. |
 | **Held-out case** | An unseen scenario reserved to test whether a change generalizes. |
-| **Production evidence** | A selected and locally redacted trace used as evidence for diagnosis and improvement. |
+| **Production evidence** | A selected, reviewed and locally redacted trace used as evidence for diagnosis or eval design. |
 | **Baseline** | The measured behavior of a particular agent version before an improvement attempt. |
 
 ## What happens during setup
@@ -119,7 +143,7 @@ Model-provider keys are optional individually. Configure only the providers you 
 
 ## Package infrastructure
 
-These packages provide the agentic-harness, evaluation, testing, and observability capabilities used by the workflow. Local evaluation and remote observability are kept separate on purpose:
+These packages provide the agentic-harness, evaluation, testing, and observability capabilities used by the workflow. Local/remote identifies a destination; offline/online identifies the evaluation mode:
 
 | Component | Why it is here | Do you need an account? |
 |---|---|---|
@@ -137,6 +161,7 @@ LangChain and LangGraph are recommended when they fit the target agent; they are
 
 - [Core concepts glossary](docs/references/core-concepts-glossary.md) — a fuller explanation of the terms used by the workflow.
 - [Agent-building best practices](docs/references/agent-building-best-practices.md) — the maintained engineering guidance behind architecture and improvement recommendations.
+- [Offline and online evaluation](docs/references/online-offline-evaluation.md) — definitions, planning, coverage, expert review and feedback routing.
 - [Evaluation result providers](docs/references/eval-result-providers.md) — credentials and destinations for evaluation results.
 
 ## For people maintaining this repository
@@ -160,7 +185,8 @@ flowchart TD
             ONBOARD["/onboard<br/>repository + credentials"] --> SETUP["lifecycle setup"]
             SETUP --> GOAL["/agent-goal-interview<br/>brief + commercial value model"]
             GOAL --> DESIGN["/agent-eval-designer<br/>cases + rubrics + simulated user"]
-            DESIGN --> ARCH["/agent-architecture-planner<br/>architecture picture + build handoff"]
+            DESIGN --> ONLINEPLAN["/agent-online-eval-planner<br/>live scoring + expert-review plan<br/>or explicit disabled reason"]
+            ONLINEPLAN --> ARCH["/agent-architecture-planner<br/>architecture picture + build handoff"]
             ARCH --> BUILD{"Selected engineering loop"}
             BUILD --> MINI["/spec-plan → /agent-build-loop<br/>TDD plan + optional testagent probes"]
             BUILD --> EXTERNAL["External coding agent<br/>or preferred engineering loop"]
@@ -175,10 +201,12 @@ flowchart TD
             direction TB
             IMPROVESTART{"Start from"}
             IMPROVESTART --> EVALRUN["/eval-agent<br/>run formal test cases"]
+            IMPROVESTART --> ONLINE["/agent-online-eval-planner<br/>monitor scores + select expert-review batch"]
             IMPROVESTART --> PROD["/agent-production-evidence<br/>select production trace"]
             EVALRUN --> CONVERSATION["Simulated user ↔ target agent<br/>conversation + trajectory"]
             CONVERSATION --> EVIDENCE["Eval artifacts or promoted trace"]
             PROD --> EVIDENCE
+            ONLINE --> EVIDENCE
             EVIDENCE --> REVIEW["/agent-behavior-review<br/>diagnose behavior and ownership"]
             REVIEW -.-> PROBE["testagent + conversation runner<br/>exploratory boundary probes"]
             PROBE -.-> REVIEW

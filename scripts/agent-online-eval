@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from datetime import datetime
+import json
+import os
+from pathlib import Path
+import sys
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
+from agent_creation.online_evaluation import (
+    PLAN_PATH,
+    INVENTORY_PATH,
+    REPORT_PATH,
+    REVIEW_BATCH_PATH,
+    REVIEW_DECISION_PATH,
+    OnlineEvalError,
+    build_online_report,
+    create_online_eval_plan,
+    read_online_traces,
+    route_review_batch,
+    select_review_batch,
+    validate_online_eval_plan,
+)
+from agent_creation.production_evidence import (
+    EvidenceProviderError,
+    EvidenceQuery,
+    query_langfuse_trace_inventory,
+)
+
+
+def read_object(path: Path, label: str) -> dict:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise OnlineEvalError([f"{label} is invalid: {error}"]) from error
+    if not isinstance(payload, dict):
+        raise OnlineEvalError([f"{label} must contain an object"])
+    return payload
+
+
+def suite_eval_ids(root: Path) -> set[str] | None:
+    path = root / "agent-lifecycle/evals/suite.yaml"
+    if not path.is_file():
+        return None
+    suite = read_object(path, "eval suite")
+    cases = suite.get("cases")
+    if not isinstance(cases, list):
+        return None
+    return {
+        item["id"]
+        for item in cases
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+
+
+def write_output(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default=str(REPOSITORY_ROOT))
+    commands = parser.add_subparsers(dest="command", required=True)
+    render = commands.add_parser("render")
+    render.add_argument("--input", required=True)
+    validate = commands.add_parser("validate")
+    validate.add_argument("--plan")
+    inventory = commands.add_parser("inventory")
+    inventory.add_argument("--query", required=True)
+    inventory.add_argument("--output")
+    report = commands.add_parser("report")
+    report.add_argument("--plan")
+    report.add_argument("--traces", required=True)
+    report.add_argument("--output")
+    review = commands.add_parser("review")
+    review.add_argument("--plan")
+    review.add_argument("--traces", required=True)
+    review.add_argument("--output")
+    route = commands.add_parser("route-review")
+    route.add_argument("--batch")
+    route.add_argument("--output")
+    arguments = parser.parse_args()
+    root = Path(arguments.root).resolve()
+    try:
+        if arguments.command == "render":
+            plan = read_object(Path(arguments.input), "online eval plan input")
+            path = create_online_eval_plan(root, plan, suite_eval_ids(root))
+            result = {"status": "complete", "plan": str(path)}
+        elif arguments.command == "inventory":
+            query = read_object(Path(arguments.query), "online trace query")
+            if not os.environ.get("LANGFUSE_PUBLIC_KEY") or not os.environ.get(
+                "LANGFUSE_SECRET_KEY"
+            ):
+                raise OnlineEvalError(["Langfuse is not configured"])
+            from langfuse import get_client
+
+            inventory_result = query_langfuse_trace_inventory(
+                get_client(),
+                EvidenceQuery(
+                    project_name=query.get("project_name"),
+                    trace_name=query.get("trace_name"),
+                    filter_expression=query.get("filter_expression"),
+                    from_timestamp=_timestamp(query.get("from_timestamp")),
+                    to_timestamp=_timestamp(query.get("to_timestamp")),
+                    page_size=query.get("page_size", 50),
+                    max_pages=query.get("max_pages", 10),
+                ),
+            )
+            output = (
+                Path(arguments.output)
+                if arguments.output
+                else root / INVENTORY_PATH
+            )
+            write_output(
+                output,
+                {
+                    "eligible_count": inventory_result.eligible_count,
+                    "inspected_count": inventory_result.inspected_count,
+                    "truncated": inventory_result.truncated,
+                    "traces": [
+                        {
+                            "trace_id": trace.trace_id,
+                            "source_link": trace.source_link,
+                            "scores": trace.scores,
+                        }
+                        for trace in inventory_result.traces
+                    ],
+                },
+            )
+            result = {"status": "complete", "artifact": str(output)}
+        elif arguments.command == "route-review":
+            batch_path = (
+                Path(arguments.batch)
+                if arguments.batch
+                else root / REVIEW_BATCH_PATH
+            )
+            result = route_review_batch(read_object(batch_path, "online review batch"))
+            output = (
+                Path(arguments.output)
+                if arguments.output
+                else root / REVIEW_DECISION_PATH
+            )
+            write_output(output, result)
+            result = {"status": "complete", "artifact": str(output)}
+        else:
+            plan_path = (
+                Path(arguments.plan)
+                if arguments.plan
+                else root / PLAN_PATH
+            )
+            plan = read_object(plan_path, "online eval plan")
+            if arguments.command == "validate":
+                errors = validate_online_eval_plan(plan, suite_eval_ids(root))
+                result = {"status": "valid" if not errors else "invalid", "errors": errors}
+                print(json.dumps(result, sort_keys=True))
+                return 0 if not errors else 1
+            traces, eligible_count = read_online_traces(Path(arguments.traces))
+            if arguments.command == "report":
+                result = build_online_report(plan, traces, eligible_count)
+                output = Path(arguments.output) if arguments.output else root / REPORT_PATH
+            else:
+                result = select_review_batch(plan, traces, eligible_count)
+                output = (
+                    Path(arguments.output)
+                    if arguments.output
+                    else root / REVIEW_BATCH_PATH
+                )
+            write_output(output, result)
+            result = {"status": "complete", "artifact": str(output)}
+    except (OnlineEvalError, EvidenceProviderError, ValueError) as error:
+        errors = error.issues if isinstance(error, OnlineEvalError) else [str(error)]
+        print(json.dumps({"status": "invalid", "errors": errors}, sort_keys=True))
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+def _timestamp(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise OnlineEvalError(["query timestamps must be ISO-8601 strings"])
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise OnlineEvalError(["query timestamps must be ISO-8601 strings"]) from error
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
