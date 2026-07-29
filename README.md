@@ -1,6 +1,6 @@
 # Agent Factory
 
-Agent Factory is a guided skillset for building, evaluating, and improving LLM-based agents. It is built around best-practice open agent frameworks: LangChain and LangGraph for agentic harnesses, LangSmith, AgentEvals, and OpenEvals for evaluation, and Langfuse for observability and remote evidence.
+Agent Factory is a Claude Code / Codex compatible guided skillset for building, evaluating, and improving LLM-based agents. It is built around best-practice open agent frameworks: LangChain and LangGraph for agentic harnesses, LangSmith, AgentEvals, and OpenEvals for evaluation, and Langfuse for observability and remote evidence.
 
 The philosophy of this repo is to start with a clear problem to solve, define what success looks like, build the smallest and most reliable architecture to satisfy the goal, and then set up an evals-based infrastructure to work towards this outcome over time.
 
