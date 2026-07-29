@@ -17,4 +17,23 @@ if [[ "$RELEVANT" == false ]]; then
   exit 0
 fi
 
-exec python3 "$ROOT/scripts/agent-config/verify_agent_config.py" --root "$ROOT"
+VERIFY_PYTHON=""
+if [[ -x "$ROOT/.venv/bin/python" ]]; then
+  VERIFY_PYTHON="$ROOT/.venv/bin/python"
+else
+  for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      if "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+        VERIFY_PYTHON="$(command -v "$candidate")"
+        break
+      fi
+    fi
+  done
+fi
+
+if [[ -z "$VERIFY_PYTHON" ]]; then
+  printf 'Python 3.11 or newer is required for repository verification\n' >&2
+  exit 1
+fi
+
+exec "$VERIFY_PYTHON" "$ROOT/scripts/agent-config/verify_agent_config.py" --root "$ROOT"
