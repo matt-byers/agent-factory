@@ -145,17 +145,17 @@ Model-provider keys are optional individually. Configure only the providers you 
 
 These packages provide the agentic-harness, evaluation, testing, and observability capabilities used by the workflow. Local/remote identifies a destination; offline/online identifies the evaluation mode:
 
-| Component | Why it is here | Do you need an account? |
+| Component | What is it used for | Do you need an account? |
 |---|---|---|
-| LangChain | A recommended foundation for standard agentic harnesses: model/tool loops, middleware, state, and structured output. | No |
-| LangGraph | A recommended harness foundation for custom state, durable execution, interrupts, and deterministic-plus-agentic workflows. | No |
-| LangSmith Python package | Runs local evaluations without uploading results to LangSmith. | No |
-| AgentEvals | Scores agent behavior, including expected tool-use trajectories. | Only a selected judge model when needed |
-| OpenEvals | Provides model-based judges and simulated users for multi-turn conversations. | Only a selected simulator or judge model |
-| Langfuse | Optionally stores remote traces, golden datasets, experiments, and production evidence. | Yes, if you use it |
-| pytest | Tests the repository's lifecycle, artifacts, adapters, and evaluation gates. | No |
+| LangChain | Agent framework. Gives the target agent a ready-made agent loop, plus standard model, message, and tool interfaces, middleware, and structured output, so the harness does not hand-roll model calls or tool dispatch. | No |
+| LangGraph | Orchestration framework. Expresses the harness as a state machine — a graph of nodes over one typed state object — for explicit control flow, durable execution, checkpointed memory, and interrupts where a human approves a step. | No |
+| LangSmith Python package | Evaluation runner library. Executes eval cases against the target agent and applies the repository's evaluators locally, with result upload disabled. Used as a runner only, never as a destination. | No |
+| AgentEvals | Evaluator package. Scores the trajectory — the sequence of tool calls and steps the agent took — against expected tool use, rather than only the final answer. | Only a selected judge model when needed |
+| OpenEvals | Evaluator package. Supplies model-based judges for qualitative rubrics, and drives a simulated user through multi-turn conversations with the target agent. | Only a selected simulator or judge model |
+| Langfuse | Observability platform and SDK. Records production traces, stores golden datasets, runs remotely stored offline experiments, holds scores, and provides annotation queues for expert review. | Yes, if you use it |
+| pytest | Test framework. Runs this repository's own test suite over the lifecycle library, artifact validation, runtime adapters, and evaluation gates. | No |
 
-LangChain and LangGraph are recommended when they fit the target agent; they are not requirements for every agent you build.
+LangChain and LangGraph build the target agent's harness; the rest measure and observe it. Both are recommended when they fit the target agent and are not requirements for every agent you build.
 
 ## Useful references
 
